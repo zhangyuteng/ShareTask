@@ -1,0 +1,16 @@
+# Windows:
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Python:
+*.py[cod]
+*.so
+*.egg
+*.egg-info
+
+/.venv/
+/tmp/
+/.idea/
+/proxy_pool/
+/.env
