@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+{% block style %}
+<style>
+    .login-wrap{
+        position: relative;
+        width:100%;
+        height:100%;
+    }
+    .ms-title{
+        position: absolute;
+        top:50%;
+        width:100%;
+        margin-top: -230px;
+        text-align: center;
+        font-size:30px;
+        color: #fff;
+
+    }
+    .ms-login{
+        position: absolute;
+        left:50%;
+        top:50%;
+        width:300px;
+        height:190px;
+        margin:-150px 0 0 -190px;
+        padding:40px;
+        border-radius: 5px;
+        background: #fff;
+    }
+    .login-btn{
+        text-align: center;
+    }
+    .login-btn button{
+        width:100%;
+        height:36px;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div id="app">
+    <div class="login-wrap">
+        <div class="ms-title">知识众包平台</div>
+        <div class="ms-login">
+            <el-form v-loading.body="loading" :model="ruleForm" :rules="rules" ref="ruleForm" label-width="0px" class="demo-ruleForm">
+                {{ login_user_form.hidden_tag() }}
+                <el-form-item prop="email">
+                    <el-input v-model="ruleForm.email" placeholder="用户名"></el-input>
+                </el-form-item>
+                <el-form-item prop="password">
+                    <el-input type="password" placeholder="密码" v-model="ruleForm.password" @keyup.enter.native="submitForm('ruleForm')"></el-input>
+                </el-form-item>
+                <el-form-item prop="remember_me">
+                    <el-checkbox v-model="ruleForm.remember_me">自动登录</el-checkbox>
+                </el-form-item>
+                <div class="login-btn">
+                    <el-button type="primary" @click="submitForm('ruleForm')">登录</el-button>
+                </div>
+            </el-form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const vm = new Vue({
+        el: '#app',
+        delimiters: ["[[", "]]"],
+        data: function () {
+            return {
+                ruleForm: {
+                    email: '',
+                    password: '',
+                    remember_me: false,
+                    csrf_token: '',
+                    submit: 'Login'
+                },
+                loading: false,
+                rules: {
+                    email: [
+                        {required: true, message: '请输入用户名', trigger: 'blur'}
+                    ],
+                    password: [
+                        {required: true, message: '请输入密码', trigger: 'blur'}
+                    ]
+                }
+            }
+        },
+        computed: {
+            csrf_token: function () {
+                return document.getElementById('csrf_token').value
+            }
+        },
+        created: function () {
+            this.ruleForm.csrf_token = this.csrf_token;
+        },
+        methods: {
+            submitForm(formName) {
+                let self = this;
+                self.$refs[formName].validate((valid) => {
+                    if (valid) {
+                        self.loading = true;
+                        if(self.ruleForm.remember_me){
+                            self.ruleForm.remember_me = 'y';
+                        }
+                        self.$loginpost('/login', self.ruleForm, function (res) {
+                            self.loading = false;
+                        }, function () {
+                            self.loading = false;
+                        });
+                    } else {
+                        return false;
+                    }
+                });
+            }
+        },
+    });
+
+</script>
+{% endblock %}

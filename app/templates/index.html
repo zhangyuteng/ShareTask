@@ -1,0 +1,396 @@
+{% extends "layout.html" %}
+{% block style %}
+    <style>
+    .word-btn {
+        margin-bottom: 8px;
+    }
+    .el-collapse-item .el-collapse-item__header{
+        border-bottom: #e6ebf5;
+    }
+    .menu-item-progress {
+        width: 500px;
+        padding-top: 18px;
+    }
+    .col-work {
+        padding-top: 20px;
+    }
+    .el-form-item .el-tag+.el-tag {
+        margin-left:10px;
+    }
+    .button-new-tag {
+        margin-left: 10px;
+        height: 24px;
+        line-height: 22px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    .input-new-tag {
+        width: 98px;
+        margin-left: 10px;
+        vertical-align: bottom;
+    }
+    .input-new-tag .el-input__inner {
+        height: 35px;
+    }
+    .english-lemmas-btn {
+        margin-bottom: 6px;
+    }
+    .my-el-tag {
+        height: 35px;
+        line-height: 35px;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    .my-means-col {
+        padding: 20px;
+    }
+    .my-html-col {
+        padding: 0 20px 10px;
+    }
+    .typo-Helvetica {
+        font-family: Helvetica;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    .my-source-title {
+        margin-bottom: 5px;
+    }
+    .my-parse {
+        margin-bottom: 15px;
+    }
+    .my-input {
+        width: auto;
+    }
+    .my-input input{
+        height: 30px;
+    }
+    </style>
+{% endblock %}
+
+{% block body %}
+<div id="app" style="overflow: auto">
+    <el-menu theme="dark" :default-active="activeIndex" class="el-menu-demo" mode="horizontal" @select="handleSelect">
+        <el-menu-item index="1">工作台</el-menu-item>
+        <el-menu-item index="2">标注结果</el-menu-item>
+        <el-menu-item index="3">规则说明</el-menu-item>
+        <el-menu-item index="6">任务进度</el-menu-item>
+        <el-menu-item index="7" class="menu-item-progress">
+            <el-progress :text-inside="true" :stroke-width="18" :percentage="progress"></el-progress>
+        </el-menu-item>
+    </el-menu>
+    <el-row style="overflow: auto">
+        <el-col :span="24">
+
+        </el-col>
+        <el-col :span="8" class="col-work">
+            <el-form ref="form" :model="task" label-width="130px" @submit.native.prevent>
+                <el-form-item label="English Lemmas">
+                    <div class="typo-Helvetica" >
+                        <el-button type="primary"
+                                   class="btn word-btn"
+                                   round
+                                   v-for="(english,index) in task.english_lemmas"
+                                   v-bind:key="index"
+                                   v-bind:data-clipboard-text="english">
+                            [[ english ]]
+                        </el-button>
+                    </div>
+                </el-form-item>
+                <el-form-item label="English Definition">
+                    <p>[[ task.english_definition ]]</p>
+                </el-form-item>
+                <el-form-item label="English Examples">
+                    <p>[[ task.english_examples ]]</p>
+                </el-form-item>
+                <el-form-item label="Chinese Lemmas">
+                    <el-tag
+                            class="my-el-tag"
+                            type="primary"
+                            v-for="(item,index) in task.chinese_lemmas"
+                            :key="item.id"
+                            :closable="true"
+                            :close-transition="false"
+                            @close="handleClose(index)"
+                            @dblclick.native="editchinese($event, index)"
+                    >
+                        <el-input
+                                type="text"
+                                class="my-input"
+                                v-model="edit_chinese"
+                                v-show="item.show_input"
+                                @keyup.enter.native="handleTagEdit(index)"
+{#                                @blur="handleTagEdit(index)"#}
+                        ></el-input>
+                        <span v-show="!item.show_input">[[item.chinese]]</span>
+                    </el-tag>
+                    <el-input
+                            class="input-new-tag my-el-tag"
+                            v-if="inputVisible"
+                            v-model="inputValue"
+                            ref="saveTagInput"
+                            size="mini"
+                            @keyup.enter.native="nextInput"
+                            @blur="handleInputConfirm"
+                    >
+                    </el-input>
+                    <el-button v-else class="button-new-tag my-el-tag" size="small" @click="showInput">+ New Sense</el-button>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" @click="onSubmit">Save & Next<i class="el-icon-upload el-icon--right"></i></el-button>
+                </el-form-item>
+                {{ form.hidden_tag() }}
+            </el-form>
+        </el-col>
+        <el-col :span="16" style="overflow:auto">
+            <el-col :span="24" class="my-means-col">
+                <el-collapse v-model="activeNames" @change="handleChange">
+                    <el-collapse-item
+                            v-for="(means, word) in task.means"
+                            :key="word"
+                            v-bind:title="word"
+                            v-bind:name="word"
+                            v-if="means"
+                    >
+                        <el-col :span="12" class="my-parse" v-for="(mean, source) in means" :key="source">
+                            <el-tag class="my-source-title">[[ source ]]</el-tag>
+                            <div v-for="item in mean" style="margin-bottom:10px;" :key="item.id">
+                                <p>
+                                    <el-button
+                                            v-for="i in item.ch"
+                                            :key="i"
+                                            type="primary"
+                                            class="english-lemmas-btn"
+                                            @click="insertTask(i, item.id)"
+                                            @click="insertTask(i, item.id)"
+                                    >
+                                        [[i]]
+                                    </el-button>
+                                </p>
+                                <ul style="margin-left: 8px; list-style: decimal">
+                                    <li v-for="sample in item.samples">
+                                        [[ sample.en ]] <br>
+                                        [[ sample.ch ]]
+                                    </li>
+                                </ul>
+                            </div>
+                        </el-col>
+                    </el-collapse-item>
+                </el-collapse>
+                <br>
+
+            </el-col>
+        </el-col>
+    </el-row>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    String.prototype.trim = function() {
+        return this.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
+    };
+    let app = new Vue({
+        el: '#app',
+        delimiters: ["[[", "]]"],
+        data: {
+            activeNames: [],
+            activeIndex: '1',
+            inputVisible: false,
+            inputValue: '',
+            progress: 0,
+            edit_chinese: '', //用来保存修改钱前的值
+            task: {
+                id: '',
+                babel_net_id: '',
+                english_lemmas: [''],
+                english_definition: '',
+                english_examples: '',
+                chinese_lemmas: [],
+                potential_translations: [''],
+                means: {},
+            },
+        },
+        created: function () {
+            this.getTask({{ task_id }});
+        },
+        computed: {
+            csrf_token: function () {
+                return document.getElementById('csrf_token').value
+            },
+        },
+        mounted() {
+            let self = this;
+            const clipboard = new Clipboard('.btn');
+            clipboard.on('success', function(e) {
+                self.$message('copy "' + e.text + '" success');
+                e.clearSelection();
+            });
+        },
+        methods: {
+            onSubmit() {
+                const self = this;
+                if(self.task.chinese_lemmas.length > 0){
+                    let chinese = [];
+                    for(let i in self.task.chinese_lemmas){
+                        chinese.push({chinese: self.task.chinese_lemmas[i].chinese, id: self.task.chinese_lemmas[i].id});
+                    }
+                    let data = {
+                        task_id: self.task.id,
+                        chinese_lemmas: JSON.stringify(chinese),
+                        csrf_token: self.csrf_token
+                    };
+                    self.$post('/task', data, function (res) {
+                        self.getTask();
+                    })
+                }else{
+                    this.$notify({
+                        title: '',
+                        message: 'Must fill in',
+                        type: 'warning',
+                        duration: 4500
+                    });
+                }
+                return false;
+            },
+            handleSelect(key, keyPath) {
+                if(key == 3){
+                    window.open('{{ url_for('main.rule') }}')
+                }
+                if(key == 2){
+                    window.open('{{ url_for('main.task_result') }}')
+                }
+            },
+            handleClose(index) {
+                this.task.chinese_lemmas.splice(index, 1);
+                return false;
+            },
+            editchinese(event, index) {
+                if(this.task.chinese_lemmas[index] === undefined){
+                    return false;
+                }
+                if(this.task.chinese_lemmas[index].show_input){
+                    return false;
+                }
+                this.edit_chinese = this.task.chinese_lemmas[index].chinese;
+                this.task.chinese_lemmas[index].show_input = true;
+                this.task.chinese_lemmas[index].focusStatus = true;
+                return false;
+            },
+            handleTagEdit(index) {
+                if(this.edit_chinese != this.task.chinese_lemmas[index].chinese){
+                    if(this.checkValueInTask(this.edit_chinese) === false){
+                        this.$notify({
+                            title: '',
+                            message: '"' + this.edit_chinese + '" 已存在',
+                            type: 'warning'
+                        });
+                        return false;
+                    }
+                }
+                if(this.task.chinese_lemmas[index].show_input === true){
+                    this.task.chinese_lemmas[index].chinese = this.edit_chinese;
+                    this.task.chinese_lemmas[index].show_input = false;
+                }
+            },
+            showInput() {
+                this.inputVisible = true;
+                this.$nextTick(_ => {
+                    this.$refs.saveTagInput.$refs.input.focus();
+                });
+            },
+            handleInputConfirm() {
+                let inputValue = this.inputValue;
+                if (inputValue) {
+                    // 检查是否存在
+                    if(this.checkValueInTask(inputValue) === false){
+                        this.$notify({
+                            title: '',
+                            message: '"' + inputValue + '" 已存在',
+                            type: 'warning'
+                        });
+                        return false;
+                    }else{
+                        this.task.chinese_lemmas.push({chinese:inputValue, id:0, show_input: false, focusStatus: false});
+                    }
+                }
+                this.inputVisible = false;
+                this.inputValue = '';
+            },
+            insertTask(chinese, paraphrase_id) {
+                chineses = chinese.split(';');
+                for(ch in chineses){
+                    chinese = chineses[ch];
+                    // 检查是否存在
+                    if(this.checkValueInTask(chinese) === false){
+                        this.$notify({
+                            title: '',
+                            message: '"' + chinese + '" 已存在',
+                            type: 'warning'
+                        });
+                    }else{
+                        this.task.chinese_lemmas.push({id:paraphrase_id, chinese: chinese, show_input: false, focusStatus: false});
+                    }
+                }
+
+            },
+            nextInput() {
+                let inputValue = this.inputValue;
+                if (inputValue) {
+                    // 检查是否存在
+                    if(this.checkValueInTask(inputValue) === false){
+                        this.$notify({
+                            title: '',
+                            message: '"' + inputValue + '" 已存在',
+                            type: 'warning'
+                        });
+                        return false;
+                    }else{
+                        this.task.chinese_lemmas.push({chinese:inputValue, id:0, show_input: false, focusStatus: false});
+                    }
+                }
+                this.inputValue = '';
+            },
+            getTask(task_id=0) {
+                let self = this;
+                let url = '/task';
+                if(task_id > 0){
+                    url += '/' + task_id;
+                }
+                this.$get(url, function (res) {
+                    self.task.babel_net_id = res.data.babel_net_id;
+                    self.task.english_lemmas = res.data.english_lemmas;
+                    self.task.english_definition = res.data.english_definition;
+                    self.task.english_examples = res.data.english_examples;
+                    self.task.id = res.data.id;
+                    self.task.means = res.data.means;
+                    self.task.chinese_lemmas = [];
+                    for(let i = 0; i < self.task.english_lemmas.length; i++){
+                        let word = self.task.english_lemmas[i];
+                        self.activeNames.push(word)
+                    }
+                }, false);
+                self.getProgress();
+            },
+            getProgress() {
+                let self = this;
+                this.$get('/progress', function (res) {
+                    self.progress = res.data
+                }, false)
+            },
+            handleChange() {
+                console.log(234234)
+            },
+            checkValueInTask(value) {
+                // 检查是否存在
+                for(i in this.task.chinese_lemmas){
+                    let task_chinese = this.task.chinese_lemmas[i].chinese;
+                    if(task_chinese == value){
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+    })
+</script>
+{% endblock %}

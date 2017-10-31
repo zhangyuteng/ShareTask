@@ -1,0 +1,114 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="row" id="app">
+    <div class="span12">
+
+    </div>
+</div>
+<script src="/static/js/vue.js"></script>
+<script src="/static/node_modules/vue-resource/dist/vue-resource.min.js"></script>
+<script>
+    String.prototype.trim = function() {
+        return this.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
+    };
+    let app = new Vue({
+        el: '#app',
+        delimiters: ["[[", "]]"],
+        data: {
+            load_task_log_id: '',
+            check_result: '1',
+            check_comment: '',
+            task_log_id: '',
+            english_lemmas: [''],
+            english_definition: '',
+            english_examples: '',
+            chinese_lemmas: [],
+            potential_translations: [''],
+            means: {},
+        },
+        created: function () {
+{#            this.getTaskLog();#}
+        },
+        methods: {
+            submit() {
+                let self =this;
+                let data = {
+                    task_log_id: self.task_log_id,
+                    result: self.check_result,
+                    comment: self.check_comment,
+                };
+                self.http_post('./task_log', data, function (res) {
+                    self.getTaskLog();
+                })
+            },
+            load_task_log() {
+                this.getTaskLog(this.load_task_log_id);
+            },
+            getTaskLog(id=0) {
+                let self = this;
+                let url = './task_log';
+                if(id > 0){
+                    url += '/' + id;
+                }
+                this.http_get(url, function (res) {
+                    self.english_lemmas = res.data.english_lemmas;
+                    self.english_definition = res.data.english_definition;
+                    self.english_examples = res.data.english_examples;
+                    self.chinese_lemmas = res.data.chinese_lemmas;
+                    self.task_log_id = res.data.task_log_id;
+                    self.load_task_log_id = res.data.task_log_id;
+                    self.means = res.data.means;
+                }, false);
+            },
+            http_get(url, callback, auto_redirect = true) {
+                this.$http.get(url)
+                    .then(function (response) {
+                        const res = response.data;
+                        if (res.status === 'success'){
+                            if (res.message !== ''){
+                                alert(res.message);
+                            }
+                            callback(res);
+                        }else{
+                            if (res.message !== ''){
+                                alert(res.message);
+                            }
+                        }
+                        if (res.redirect !== '' && auto_redirect){
+                            setTimeout(function () {
+                                location.href = res.redirect
+                            }, 2000)
+                        }
+                    }, function (response) {
+                        alert('网络错误，请刷新后重试');
+                        console.log(response);
+                    });
+            },
+            http_post(url, data, callback, auto_redirect = true) {
+                this.$http.post(url, data)
+                    .then(function (response) {
+                        const res = response.data;
+                        if (res.status === 'success'){
+                            if (res.message !== ''){
+                                alert(res.message);
+                            }
+                            callback(res);
+                        }else{
+                            if (res.message !== ''){
+                                alert.error(res.message);
+                            }
+                        }
+                        if (res.redirect !== '' && auto_redirect){
+                            setTimeout(function () {
+                                location.href = res.redirect
+                            }, 2000)
+                        }
+                    }, function (response) {
+                        alert('网络错误，请刷新后重试');
+                        console.log(response);
+                    });
+            }
+        }
+    })
+</script>
+{% endblock %}

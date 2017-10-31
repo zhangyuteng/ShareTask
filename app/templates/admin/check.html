@@ -1,0 +1,275 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="row" id="app">
+    <div class="span12" v-show="message">
+        <div class="alert alert-block alert-error fade in">
+            <button type="button" class="close" data-dismiss="alert">×</button>
+            <h4 class="alert-heading">[[ message ]]</h4>
+        </div>
+    </div>
+    <div class="span12">
+        <div class="row">
+            <div class="span3">
+                <span>
+                    总共: <span class="badge badge-info">[[progress.total]]</span>
+                    完成: <span class="badge badge-info">[[progress.done]]</span>
+                    剩余: <span class="badge badge-info">[[progress.rest]]</span>
+                </span>
+            </div>
+            <div class="span9">
+                <div class="progress progress-striped">
+                    <div class="bar" v-bind:style="{width: progress.done/progress.total*100+'%'}"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="span12">
+        <div class="row">
+            <div class="span8">
+                <form class="form-horizontal">
+                    <div class="control-group">
+                        <label class="control-label" for="inputEmail">审核结果</label>
+                        <div class="controls">
+                            <label class="radio">
+                                <input type="radio" name="result" v-model="check_result" value="1" checked>
+                                通过
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="result" v-model="check_result" value="0">
+                                不通过
+                            </label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label" for="inputPassword">原因</label>
+                        <div class="controls">
+                            <textarea rows="3" v-model="check_comment"></textarea>
+                            <span class="help-inline">仅不通过时填写</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <div class="controls">
+                            <button type="button" @click="submit(onlysubmit=1)" class="btn btn-primary">保存</button>
+                            <button type="button" @click="submit" class="btn btn-primary">保存&下一个</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="span4">
+                <form class="form-search" @submit.prevent="load_task_log">
+                    <input style="width: 30px" type="text" v-model="load_task_log_id" class="input-medium search-query">
+                    <button type="button" class="btn" @click="load_task_log">载入</button>
+                </form>
+                <div class="btn-group">
+                    <button class="btn" @click="getTaskLog(task_log_id-1)">上一个</button>
+                    <button class="btn" @click="getTaskLog(task_log_id+1)">下一个</button>
+                </div>
+                <div class="btn-group">
+                    <button class="btn" @click="goEditTask">修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="span4">
+        <form class="form-horizontal">
+            <div class="control-group">
+                <label class="control-label" for="inputEmail">English Lemmas</label>
+                <div class="controls">
+                    <span class="label label-success"
+                          style="margin-right: 8px;margin-bottom: 8px"
+                          v-for="word in english_lemmas" :key="word">[[ word ]]</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label" for="inputPassword">Chinese Lemmas</label>
+                <div class="controls">
+                    <p>
+                    <span class="label label-success"
+                          style="margin-right: 8px;margin-bottom: 8px;white-space:normal;line-height: 15px"
+                          v-for="item in chinese_lemmas" :key="item.id">[[ item.chinese ]]</span>
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label" for="inputPassword">English Definition</label>
+                <div class="controls">
+                    <p>[[ english_definition ]]</p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label" for="inputPassword">English Examples</label>
+                <div class="controls">
+                    <p>[[ english_examples ]]</p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label" for="inputPassword">Post User</label>
+                <div class="controls">
+                    <p>[[ username ]] - [[ userid ]]</p>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="span8">
+        <div class="row">
+            <div class="span8" style="margin-bottom: 18px"
+                 v-for="(means, word) in means" v-if="means">
+                <ul class="breadcrumb" style="margin-bottom: 5px">
+                    <li>[[ word ]]</li>
+                </ul>
+                <div class="row">
+                    <div class="span4" v-for="(mean, source) in means">
+                        <p><span class="label">[[ source ]]</span></p>
+                        <div v-for="item in mean">
+                            <b>[[ item.ch ]]</b>
+                            <div v-for="sample in item.samples">
+                                <p>[[ sample.en ]]</p>
+                                <p>[[ sample.ch ]]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/static/js/vue.js"></script>
+<script src="/static/node_modules/vue-resource/dist/vue-resource.min.js"></script>
+<script>
+    String.prototype.trim = function() {
+        return this.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
+    };
+    let app = new Vue({
+        el: '#app',
+        delimiters: ["[[", "]]"],
+        data: {
+            progress: {total:0, rest:0, done:0},
+            load_task_log_id: '',
+            message: '',
+            check_result: '1',
+            check_comment: '',
+            task_id: 0,
+            task_log_id: {{ task_log_id }},
+            english_lemmas: [''],
+            english_definition: '',
+            english_examples: '',
+            chinese_lemmas: [],
+            potential_translations: [''],
+            username: '',
+            userid: '',
+            means: {},
+        },
+        created: function () {
+            this.getTaskLog(this.task_log_id);
+        },
+        methods: {
+            submit(onlysubmit=0) {
+                let self =this;
+                if(self.task_log_id > 0){
+                    let data = {
+                        task_log_id: self.task_log_id,
+                        result: self.check_result,
+                        comment: self.check_comment,
+                    };
+                    self.http_post('{{ url_for('check.post_task_log') }}', data, function (res) {
+                        if(onlysubmit == 0){
+                            self.getTaskLog();
+                        }
+                    })
+                }
+            },
+            goEditTask() {
+                window.open('/'+this.task_id);
+            },
+            load_task_log() {
+                console.log('asdfasdfasd');
+                this.getTaskLog(this.load_task_log_id);
+            },
+            getTaskLog(id=0) {
+                let self = this;
+                let url = '{{ url_for('check.get_task_log') }}';
+                if(id > 0){
+                    url += '/' + id;
+                }
+                this.http_get(url, function (res) {
+                    if(res.data){
+                        self.english_lemmas = res.data.english_lemmas;
+                        self.english_definition = res.data.english_definition;
+                        self.english_examples = res.data.english_examples;
+                        self.chinese_lemmas = res.data.chinese_lemmas;
+                        self.task_log_id = res.data.task_log_id;
+                        self.task_id = res.data.task_id;
+                        self.load_task_log_id = res.data.task_log_id;
+                        self.means = res.data.means;
+                        self.check_result = res.data.check_result;
+                        self.check_comment = res.data.check_comment;
+                        self.username = res.data.username;
+                        self.userid = res.data.userid;
+                        self.message = '';
+                    }
+                }, false);
+                self.getProgress()
+            },
+            getProgress() {
+                let self = this;
+                let url = '{{ url_for('check.progress') }}';
+                this.http_get(url, function (res) {
+                    self.progress.total = res.data.total;
+                    self.progress.rest = res.data.rest;
+                    self.progress.done = res.data.done;
+                }, false);
+            },
+            http_get(url, callback, auto_redirect = true) {
+                let self = this;
+                this.$http.get(url)
+                    .then(function (response) {
+                        const res = response.data;
+                        if (res.status === 'success'){
+                            if (res.message !== ''){
+                                self.message = res.message;
+                            }
+                            callback(res);
+                        }else{
+                            if (res.message !== ''){
+                                self.message = res.message;
+                            }
+                        }
+                        if (res.redirect !== '' && auto_redirect){
+                            setTimeout(function () {
+                                location.href = res.redirect
+                            }, 2000)
+                        }
+                    }, function (response) {
+                        self.message = '网络错误，请刷新后重试';
+                        console.log(response);
+                    });
+            },
+            http_post(url, data, callback, auto_redirect = true) {
+                let self = this;
+                this.$http.post(url, data)
+                    .then(function (response) {
+                        const res = response.data;
+                        if (res.status === 'success'){
+                            if (res.message !== ''){
+                                self.message = res.message;
+                            }
+                            callback(res);
+                        }else{
+                            if (res.message !== ''){
+                                self.message = res.message;
+                            }
+                        }
+                        if (res.redirect !== '' && auto_redirect){
+                            setTimeout(function () {
+                                location.href = res.redirect
+                            }, 2000)
+                        }
+                    }, function (response) {
+                        self.message = '网络错误，请刷新后重试';
+                        console.log(response);
+                    });
+            }
+        }
+    })
+</script>
+{% endblock %}

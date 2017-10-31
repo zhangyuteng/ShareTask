@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>知识众包</title>
+    {% block head %}
+    <link rel="stylesheet" href="/static/node_modules/element-ui/lib/theme-default/index.css">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/color-dark.css">
+    {% block style %}{% endblock %}
+    {% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+<script src="/static/js/vue.js"></script>
+<script src="/static/node_modules/vue-resource/dist/vue-resource.min.js"></script>
+<script src="/static/node_modules/element-ui/lib/index.js"></script>
+<script src="/static/js/clipboard.min.js"></script>
+{#<script src="/static/node_modules/vue-clipboard2/dist/vue-clipboard.min.js"></script>#}
+{#<script src="/static/node_modules/vue-clipboards/dist/vue-clipboards.js"></script>#}
+<script src="/static/js/utils.js"></script>
+{% block script %}{% endblock %}
+</html>
