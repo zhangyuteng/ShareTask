@@ -43,7 +43,6 @@ def rule():
 @main.route('/result', methods=['GET'])
 @login_required
 def task_result():
-    print current_user
     logs = CheckLog.query.filter(CheckLog.task_log.has(user_id=current_user.id)).order_by(CheckLog.confirmed_at.desc()).all()
     true_num = 0
     total = 0
@@ -61,7 +60,6 @@ def task_result():
                                'comment': log.comment})
     if total > 0:
         correct_rate = round(true_num / total * 100.0, 2)
-    print correct_rate
     return render_template('task_result.html', user=current_user, error_logs=error_logs,
                            correct_rate=correct_rate, total=total, fail_num=fail_num, true_num=true_num)
 
@@ -124,12 +122,6 @@ def post_task():
             db.session.commit()
             return render_json(status=1, message=message)
     return render_json(status=0, message='\n'.join(form.errors.values()))
-
-
-def format_dict(tr):
-    if len(tr['translate']) > 0:
-        for i in tr['translate']:
-            print i
 
 
 # 后台管理页面的首页

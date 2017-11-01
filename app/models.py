@@ -102,12 +102,10 @@ class Task(db.Model):
         users = User.query.with_lockmode('read').all()
         all_used_task = []
         if task_id > 0:
-            print 1111
             task = Task.query.get(task_id)
         elif current_user.task_id and current_user.task_id > 0:
             task = Task.query.get(current_user.task_id)
         else:
-            print 3333333
             for u in users:
                 if u.task_id > 0:
                     all_used_task.append(u.task_id)
@@ -115,7 +113,6 @@ class Task(db.Model):
                 task = Task.query.filter(and_(Task.task_logs == None, not_(Task.id.in_(all_used_task)))).order_by(Task.id.asc()).with_lockmode('read').first()
             else:
                 task = Task.query.filter(Task.task_logs == None).order_by(Task.id.asc()).first()
-        print task
         user = User.query.get(current_user.id)
         user.task_id = task.id
         db.session.add(user)
