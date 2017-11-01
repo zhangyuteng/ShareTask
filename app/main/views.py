@@ -355,8 +355,8 @@ class CustomModelViewPos(CustomModelViewBase):
 admin.add_view(CheckView(name=u'审查', endpoint='check'))
 
 admin.add_view(CustomModelViewTaskLog(TaskLog, db.session, name=u'标注列表'))
+admin.add_view(CustomModelViewUser(User, db.session, name=u'用户管理'))
 admin.add_view(CustomModelViewBase(Role, db.session, category='Models'))
-admin.add_view(CustomModelViewUser(User, db.session, category='Models'))
 admin.add_view(CustomModelViewTask(Task, db.session, category='Models'))
 admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, category='Models'))
 admin.add_view(CustomModelViewDictionary(Dictionary, db.session, category='Models'))
