@@ -71,7 +71,8 @@
 <div id="app" style="overflow: auto">
     <el-menu theme="dark" :default-active="activeIndex" class="el-menu-demo" mode="horizontal" @select="handleSelect">
         <el-menu-item index="1">工作台</el-menu-item>
-        <el-menu-item index="2">标注结果</el-menu-item>
+        <el-menu-item index="4">标注记录</el-menu-item>
+        <el-menu-item index="2">审核结果</el-menu-item>
         <el-menu-item index="3">规则说明</el-menu-item>
         <el-menu-item index="6">任务进度</el-menu-item>
         <el-menu-item index="7" class="menu-item-progress">
@@ -119,7 +120,7 @@
                                 v-model="edit_chinese"
                                 v-show="item.show_input"
                                 @keyup.enter.native="handleTagEdit(index)"
-{#                                @blur="handleTagEdit(index)"#}
+                                @blur="handleTagEdit(index)"
                         ></el-input>
                         <span v-show="!item.show_input">[[item.chinese]]</span>
                     </el-tag>
@@ -208,6 +209,7 @@
                 chinese_lemmas: [],
                 potential_translations: [''],
                 means: {},
+                task_log_id: 0,
             },
         },
         created: function () {
@@ -237,7 +239,7 @@
                     let data = {
                         task_id: self.task.id,
                         chinese_lemmas: JSON.stringify(chinese),
-                        csrf_token: self.csrf_token
+                        csrf_token: self.csrf_token,
                     };
                     self.$post('/task', data, function (res) {
                         self.getTask();
@@ -255,9 +257,10 @@
             handleSelect(key, keyPath) {
                 if(key == 3){
                     window.open('{{ url_for('main.rule') }}')
-                }
-                if(key == 2){
+                }else if(key == 2){
                     window.open('{{ url_for('main.task_result') }}')
+                }else if(key == 4){
+                    window.location = '{{ url_for('main.task_logs') }}'
                 }
             },
             handleClose(index) {
@@ -363,10 +366,13 @@
                     self.task.english_examples = res.data.english_examples;
                     self.task.id = res.data.id;
                     self.task.means = res.data.means;
-                    self.task.chinese_lemmas = [];
+                    self.task.chinese_lemmas = res.data.chinese_lemmas;
                     for(let i = 0; i < self.task.english_lemmas.length; i++){
                         let word = self.task.english_lemmas[i];
                         self.activeNames.push(word)
+                    }
+                    if(res.data.task_log_id !== undefined){
+                        self.task.task_log_id = res.data.task_log_id;
                     }
                 }, false);
                 self.getProgress();

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="renderer" content="webkit">
+    <title>标注记录</title>
+    <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h3>{{ username }} 的标注记录</h3>
+            {% if task_logs.items %}
+                <br>
+                <table class="table table-bordered">
+                    <thead>
+                    <tr>
+                        <th>English Lemmas</th>
+                        <th>Chinese Lemmas</th>
+                        <th>English Definition</th>
+                        <th>Operation</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for log in task_logs.items %}
+                    <tr>
+                        <td>{{ log.task.english_lemmas }}</td>
+                        <td>{{ log.chinese_lemmas_str }}</td>
+                        <td>{{ log.task.english_definition }}</td>
+                        <td><a href="{{ url_for('main.index') }}{{ log.task.id }}"> <span class="glyphicon glyphicon-edit"></span> modify</a></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+            <nav aria-label="...">
+                <ul class="pager">
+                    {% if task_logs.has_prev %}
+                        <li><a href="{{ url_for('main.task_logs', page = task_logs.prev_num) }}">Previous</a></li>
+                    {% else %}
+                        <li class="disabled"><a href="#">Previous</a></li>
+                    {% endif %}
+
+                    {% if task_logs.has_next %}
+                        <li><a href="{{ url_for('main.task_logs', page = task_logs.next_num) }}">Previous</a></li>
+                    {% else %}
+                        <li class="disabled"><a href="#">Next</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+</body>
+</html>

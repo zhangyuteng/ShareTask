@@ -40,10 +40,20 @@ def rule():
     return render_template('rule.html')
 
 
+@main.route('/logs/', methods=['GET'])
+@main.route('/logs/<int:page>', methods=['GET'])
+@login_required
+def task_logs(page=1):
+    logs = TaskLog.query.filter(TaskLog.user_id == current_user.id).order_by(TaskLog.confirmed_at.desc())\
+        .paginate(page, 10, False)
+    return render_template('task_logs.html', task_logs=logs, username=current_user.username)
+
+
 @main.route('/result', methods=['GET'])
 @login_required
 def task_result():
-    logs = CheckLog.query.filter(CheckLog.task_log.has(user_id=current_user.id)).order_by(CheckLog.confirmed_at.desc()).all()
+    logs = CheckLog.query.filter(CheckLog.task_log.has(user_id=current_user.id)).order_by(
+        CheckLog.confirmed_at.desc()).all()
     true_num = 0
     total = 0
     fail_num = 0
@@ -60,6 +70,8 @@ def task_result():
                                'comment': log.comment})
     if total > 0:
         correct_rate = round(true_num / total * 100.0, 2)
+    else:
+        correct_rate = 0
     return render_template('task_result.html', user=current_user, error_logs=error_logs,
                            correct_rate=correct_rate, total=total, fail_num=fail_num, true_num=true_num)
 
@@ -68,12 +80,60 @@ def task_result():
 @main.route('/task/<int:task_id>', methods=['GET'])
 @login_required
 def get_task(task_id=0):
-    if task_id > 0:
-        if (not current_user.has_role('superuser')) or (not current_user.has_role('admin')):
-            # 只有管理员才能查看指定的任务
-            task_id = 0
     task = Task.get_one(task_id)
+    if task_id > 0:
+        # 若当前用户标注过该记录，说明这是修改操作
+        task_log = None
+        for log in task.task_logs.all():
+            if log.user_id == current_user.id:
+                task_log = log
+        if task_log is not None:
+            setattr(task, 'task_log', task_log)
+        elif current_user.has_role('admin') or current_user.has_role('checker'):
+            # 没有获取到task_log，检查当前用户是否为admin或checker
+            pass
+        else:
+            # 以上条件都不满足，用户没有权限自己选择任务
+            redirect(url_for('index'))
+
     return render_json(task.to_json(), 1)
+
+
+@main.route('/task', methods=['POST'])
+@login_required
+def post_task():
+    form = TaskLogForm()
+    if form.validate_on_submit():
+        # 检查非法字符
+        if form.validate_invaild_symbol():
+            tl = TaskLog.query.filter(
+                and_(TaskLog.task_id == form.task_id.data, TaskLog.user_id == current_user.id)).first()
+            # 清理前后空格
+            chineses = json.loads(form.chinese_lemmas.data)
+            for i, v in enumerate(chineses):
+                chineses[i]['chinese'] = v['chinese'].strip()
+                form.chinese_lemmas.data = json.dumps(chineses)
+
+            if tl:
+                # 若用户提交过，更新
+                tl.chinese_lemmas = form.chinese_lemmas.data
+                tl.confirmed_at = datetime.now()
+                message = 'Modified successfully'
+                db.session.commit()
+            else:
+                tl = TaskLog(task_id=form.task_id.data,
+                             user_id=current_user.id,
+                             chinese_lemmas=form.chinese_lemmas.data,
+                             confirmed_at=datetime.now())
+                message = 'Saved successfully'
+                db.session.add(tl)
+                db.session.commit()
+            # 将用户正在工作的任务清空
+            user = User.query.get(current_user.id)
+            user.task_id = None
+            db.session.commit()
+            return render_json(status=1, message=message)
+    return render_json(status=0, message='\n'.join(form.errors.values()))
 
 
 @main.route('/progress')
@@ -89,47 +149,11 @@ def progress():
     return render_json(status=1, data=data)
 
 
-@main.route('/task', methods=['POST'])
-@login_required
-def post_task():
-    form = TaskLogForm()
-    if form.validate_on_submit():
-        # 检查非法字符
-        if form.validate_invaild_symbol():
-            tl = TaskLog.query.filter(
-                and_(TaskLog.task_id == form.task_id.data, TaskLog.user_id == current_user.id)).first()
-            # 清理前后空格
-            chineses = json.loads(form.chinese_lemmas.data)
-            for i, v in enumerate(chineses):
-                chineses[0]['chinese'] = v['chinese'].strip()
-                form.chinese_lemmas.data = json.dumps(chineses)
-            if tl:
-                # 若用户提交过，更新
-                tl.chinese_lemmas = form.chinese_lemmas.data
-                tl.confirmed_at = datetime.now()
-                message = 'Modified successfully'
-            else:
-                tl = TaskLog(task_id=form.task_id.data,
-                             user_id=current_user.id,
-                             chinese_lemmas=form.chinese_lemmas.data,
-                             confirmed_at=datetime.now())
-                message = 'Saved successfully'
-            # 将用户正在工作的任务清空
-            user = User.query.get(current_user.id)
-            user.task_id = None
-            db.session.add(user)
-            db.session.add(tl)
-            db.session.commit()
-            return render_json(status=1, message=message)
-    return render_json(status=0, message='\n'.join(form.errors.values()))
-
-
 # 后台管理页面的首页
 class CheckView(BaseView):
-
     @expose('/')
     @expose('/<int:task_log_id>')
-    @roles_accepted('admin', 'superuser')
+    @roles_accepted('admin', 'checker')
     def check_task_log(self, task_log_id=0):
         if task_log_id == 0:
             task_log_id = request.args.get('id')
@@ -140,7 +164,7 @@ class CheckView(BaseView):
         return self.render('admin/check.html', task_log_id=task_log_id)
 
     @expose('/progress')
-    @roles_accepted('admin', 'superuser')
+    @roles_accepted('admin', 'checker')
     @cache.cached(timeout=60)
     def progress(self):
         """
@@ -159,7 +183,7 @@ class CheckView(BaseView):
 
     @expose('/task_log', methods=['GET'])
     @expose('/task_log/<int:task_log_id>', methods=['GET'])
-    @roles_accepted('admin', 'superuser')
+    @roles_accepted('admin', 'checker')
     @login_required
     def get_task_log(self, task_log_id=0):
         task_log = TaskLog.get_one(task_log_id)
@@ -169,7 +193,7 @@ class CheckView(BaseView):
             return render_json(status=1, message='暂无需要审核的标注')
 
     @expose('/task_log', methods=['POST'])
-    @roles_accepted('admin', 'superuser')
+    @roles_accepted('admin', 'checker')
     @login_required
     def post_task_log(self):
         data = request.get_json()
@@ -202,6 +226,10 @@ class CheckView(BaseView):
         db.session.commit()
         return render_json(status=1)
 
+    @expose('/who', methods=['GET'])
+    def who(self):
+        return '{}-{}'.format(current_user.email, current_user.id)
+
 
 # Create customized model view class
 class CustomModelViewBase(ModelView):
@@ -220,7 +248,7 @@ class CustomModelViewBase(ModelView):
     def is_accessible(self):
         if not current_user.is_active or not current_user.is_authenticated:
             return False
-        if current_user.has_role('superuser') or current_user.has_role('admin'):
+        if current_user.has_role('admin'):
             return True
         return False
 
@@ -325,6 +353,13 @@ class CustomModelViewTaskLog(CustomModelViewBase):
     column_extra_row_actions = [
         EndpointLinkRowAction('icon-check', 'check.check_task_log', title=u'审查')
     ]
+
+    def is_accessible(self):
+        if not current_user.is_active or not current_user.is_authenticated:
+            return False
+        if current_user.has_role('admin') or current_user.has_role('checker'):
+            return True
+        return False
 
 
 class CustomModelViewParaphrase(CustomModelViewBase):

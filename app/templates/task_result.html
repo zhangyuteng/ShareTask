@@ -6,7 +6,7 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="renderer" content="webkit">
-    <title>Document</title>
+    <title>审核结果</title>
     <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" rel="stylesheet">
 </head>
@@ -14,7 +14,7 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12">
-            <h3><{{ user.username }}> 的标注结果，抽查{{ total }}条，合格{{ true_num }}条，<b>正确率: {{ correct_rate }}% </b></h3>
+            <h3>{{ user.username }} 的标注结果，抽查{{ total }}条，合格{{ true_num }}条，<b>正确率: {{ correct_rate }}% </b></h3>
             {% if error_logs %}
                 <br>
                 <h4>不合格的标注结果</h4>

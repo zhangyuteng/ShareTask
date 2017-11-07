@@ -127,7 +127,7 @@ class Task(db.Model):
         return task
 
     def to_json(self):
-        json = {
+        data = {
             'id': self.id,
             'babel_net_id': self.babel_net_id,
             'english_lemmas': [i.replace('_', ' ').strip() for i in self.english_lemmas.split(',')],
@@ -137,7 +137,9 @@ class Task(db.Model):
             'potential_translations': [i.strip() for i in self.potential_translations.split(',')],
             'means': self.means
         }
-        return json
+        if hasattr(self, 'task_log'):
+            data['chinese_lemmas'] = json.loads(self.task_log.chinese_lemmas)
+        return data
 
     @property  # for Flask-Admin column_formatters use
     def task_logs_str(self):
