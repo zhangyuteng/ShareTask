@@ -374,7 +374,8 @@ class CustomModelViewDictionary(CustomModelViewBase):
 
 class CustomModelViewTaskLog(CustomModelViewBase):
     can_create = False
-    # can_edit = False
+    can_edit = False
+    can_delete = False
     column_default_sort = ('confirmed_at', False)
     column_list = ('id', 'chinese_lemmas', 'task', 'user', 'check_logs', 'confirmed_at')
     column_filters = ('task', 'user', 'check_logs')
