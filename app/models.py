@@ -2,6 +2,7 @@
 import random
 from datetime import datetime
 
+import re
 from flask import json
 from flask_login import current_user
 from flask_security import UserMixin, RoleMixin
@@ -230,7 +231,7 @@ class TaskLog(db.Model):
         ulist = []
         for t in json.loads(self.chinese_lemmas):
             ulist.append(t['chinese'])
-        return ';'.join(ulist)
+        return '; '.join(ulist)
 
     def __repr__(self):
         return '<TaskLog-%d Task-%d>' % (self.id, self.task_id)
@@ -268,6 +269,9 @@ class Dictionary(db.Model):
                         p.ch = p.ch.replace(u'; ', u';')
                         p.ch = p.ch.replace(u'； ', u';')
                         p.ch = p.ch.replace(u'；', u';')
+                        p.ch = p.ch.replace(u',', u';')
+                        p.ch = p.ch.replace(u'，', u';')
+                        p.ch = re.sub(ur':$|：$', u'', p.ch)
                         ch = p.ch.split(';')
                     if p.source.comment in result:
                         result[p.source.comment].append({'id': p.id, 'ch': ch, 'en': p.en, 'samples': [i.to_json() for i in p.samples.all()]})

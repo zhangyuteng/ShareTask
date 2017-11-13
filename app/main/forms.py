@@ -13,7 +13,7 @@ from wtforms import (
     ValidationError,
     Field
 )
-invaild_RE = re.compile(r'[\(\)\]\[]|\.{2,}|;')
+invaild_RE = re.compile(ur'[\(\)\（\）\〔\〕\]\[]|\.{2,}|;')
 
 
 class CKTextAreaWidget(widgets.TextArea):
@@ -57,7 +57,8 @@ class TaskLogForm(FlaskForm):
             if invaild_RE.search(item['chinese']):
                 errors.append(item['chinese'])
         if errors:
-            self.errors['chinese_lemmas'] = u'" {} " have illegal characters'.format(u','.join(errors))
+            print errors
+            self.errors['chinese_lemmas'] = [u'" {} " have illegal characters'.format(u','.join(errors))]
             return False
         else:
             return True

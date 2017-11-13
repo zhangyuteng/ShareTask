@@ -8,6 +8,7 @@ from flask_admin import BaseView, expose
 from flask_admin._backwards import ObsoleteAttr
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.form import rules
+from flask_admin.menu import MenuLink
 from flask_admin.model.template import LinkRowAction, EndpointLinkRowAction
 from flask_babelex import string_types
 from flask_security import current_user, login_required, roles_accepted
@@ -31,7 +32,7 @@ from ..models import Task, TaskLog, User, Dictionary, Role, CheckLog, Source, Po
 def index(task_id=0):
     form = TaskLogForm()
     return render_template('index.html',
-                           form=form, task_id=task_id)
+                           form=form, task_id=task_id, user=current_user)
 
 
 @main.route('/rule', methods=['GET'])
@@ -44,7 +45,7 @@ def rule():
 @main.route('/logs/<int:page>', methods=['GET'])
 @login_required
 def task_logs(page=1):
-    logs = TaskLog.query.filter(TaskLog.user_id == current_user.id).order_by(TaskLog.confirmed_at.desc())\
+    logs = TaskLog.query.filter(TaskLog.user_id == current_user.id).order_by(TaskLog.confirmed_at.desc()) \
         .paginate(page, 10, False)
     return render_template('task_logs.html', task_logs=logs, username=current_user.username)
 
@@ -133,7 +134,13 @@ def post_task():
             user.task_id = None
             db.session.commit()
             return render_json(status=1, message=message)
-    return render_json(status=0, message='\n'.join(form.errors.values()))
+    errors = []
+    for k, v in form.errors.iteritems():
+        msg = []
+        for m in v:
+            msg.append(m)
+        errors.append(u'; '.join(msg))
+    return render_json(status=0, message='\n'.join(errors))
 
 
 @main.route('/progress')
@@ -153,7 +160,6 @@ def progress():
 class CheckView(BaseView):
     @expose('/')
     @expose('/<int:task_log_id>')
-    @roles_accepted('admin', 'checker')
     def check_task_log(self, task_log_id=0):
         if task_log_id == 0:
             task_log_id = request.args.get('id')
@@ -164,7 +170,6 @@ class CheckView(BaseView):
         return self.render('admin/check.html', task_log_id=task_log_id)
 
     @expose('/progress')
-    @roles_accepted('admin', 'checker')
     @cache.cached(timeout=60)
     def progress(self):
         """
@@ -183,7 +188,6 @@ class CheckView(BaseView):
 
     @expose('/task_log', methods=['GET'])
     @expose('/task_log/<int:task_log_id>', methods=['GET'])
-    @roles_accepted('admin', 'checker')
     @login_required
     def get_task_log(self, task_log_id=0):
         task_log = TaskLog.get_one(task_log_id)
@@ -193,7 +197,6 @@ class CheckView(BaseView):
             return render_json(status=1, message='暂无需要审核的标注')
 
     @expose('/task_log', methods=['POST'])
-    @roles_accepted('admin', 'checker')
     @login_required
     def post_task_log(self):
         data = request.get_json()
@@ -226,9 +229,29 @@ class CheckView(BaseView):
         db.session.commit()
         return render_json(status=1)
 
-    @expose('/who', methods=['GET'])
-    def who(self):
-        return '{}-{}'.format(current_user.email, current_user.id)
+    @expose('/users')
+    def check_users(self):
+
+        return self.render('admin/check_users.html')
+
+    def is_accessible(self):
+        if not current_user.is_active or not current_user.is_authenticated:
+            return False
+        if current_user.has_role('checker') or current_user.has_role('admin'):
+            return True
+        return False
+
+    def _handle_view(self, name, **kwargs):
+        """
+        Override builtin _handle_view in order to redirect users when a view is not accessible.
+        """
+        if not self.is_accessible():
+            if current_user.is_authenticated:
+                # permission denied
+                abort(403)
+            else:
+                # login
+                return redirect(url_for('security.login', next=request.url))
 
 
 # Create customized model view class
@@ -286,6 +309,10 @@ class CustomModelViewUser(CustomModelViewBase):
         rules.Field('new_password')
     )
 
+    column_extra_row_actions = [
+        EndpointLinkRowAction('icon-check', 'check.check_task_log', title=u'审查')
+    ]
+
     def get_create_form(self):
         form = self.scaffold_form()
         form.email = fields.StringField('Username', [validators.DataRequired()])
@@ -319,6 +346,26 @@ class CustomModelViewTask(CustomModelViewBase):
 class CustomModelViewCheckLog(CustomModelViewBase):
     can_edit = False
     can_create = False
+    can_export = True
+    column_export_list = ('babel_net_id', 'english_lemmas', 'english_definition', 'english_examples', 'chinese_lemmas', 'potential_translations')
+    column_formatters_export = dict(
+        babel_net_id=lambda v, c, m, p: m.task_log.task.babel_net_id,
+        english_lemmas=lambda v, c, m, p: m.task_log.task.english_lemmas,
+        english_definition=lambda v, c, m, p: m.task_log.task.english_definition,
+        english_examples=lambda v, c, m, p: m.task_log.task.english_examples,
+        chinese_lemmas=lambda v, c, m, p: m.task_log.chinese_lemmas_str,
+        potential_translations=lambda v, c, m, p: m.task_log.task.potential_translations,
+    )
+    column_filters = ('result', 'confirmed_at', 'user.email')
+    # Default sort column if no sorting is applied.
+    column_default_sort = ('confirmed_at', True)
+    # the example of using AJAX for foreign key model loading.
+    form_ajax_refs = {
+        'task_log': {
+            'fields': ('id', ),
+            'page_size': 10
+        }
+    }
 
 
 class CustomModelViewDictionary(CustomModelViewBase):
@@ -330,7 +377,7 @@ class CustomModelViewTaskLog(CustomModelViewBase):
     # can_edit = False
     column_default_sort = ('confirmed_at', False)
     column_list = ('id', 'chinese_lemmas', 'task', 'user', 'check_logs', 'confirmed_at')
-    column_filters = ('task', 'user')
+    column_filters = ('task', 'user', 'check_logs')
     form_excluded_columns = ('task', 'check_logs')
     column_formatters = dict(
         check_logs=lambda v, c, m, p: m.check_logs_str,
@@ -338,18 +385,8 @@ class CustomModelViewTaskLog(CustomModelViewBase):
         task=lambda v, c, m, p: m.task.english_lemmas,
         user=lambda v, c, m, p: '{}-{}'.format(m.user.id, m.user.email),
     )
-
-    class glink(LinkRowAction):
-        def render(self, context, row_id, row):
-            m = self._resolve_symbol(context, 'row_actions.link')
-
-            if isinstance(self.url, string_types):
-                row_group_id = 1
-                url = self.url.format(row_id=row_id, row_group_id=row_group_id)
-            else:
-                url = self.url(self, row_id, row)
-            return m(self, url)
-
+    # Default sort column if no sorting is applied.
+    column_default_sort = ('confirmed_at', True)
     column_extra_row_actions = [
         EndpointLinkRowAction('icon-check', 'check.check_task_log', title=u'审查')
     ]
@@ -391,11 +428,13 @@ admin.add_view(CheckView(name=u'审查', endpoint='check'))
 
 admin.add_view(CustomModelViewTaskLog(TaskLog, db.session, name=u'标注列表'))
 admin.add_view(CustomModelViewUser(User, db.session, name=u'用户管理'))
+admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, name=u'导出标注记录'))
 admin.add_view(CustomModelViewBase(Role, db.session, category='Models'))
 admin.add_view(CustomModelViewTask(Task, db.session, category='Models'))
-admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, category='Models'))
 admin.add_view(CustomModelViewDictionary(Dictionary, db.session, category='Models'))
 admin.add_view(CustomModelViewParaphrase(Paraphrase, db.session, category='Models'))
 admin.add_view(CustomModelViewSample(Sample, db.session, category='Models'))
 admin.add_view(CustomModelViewSource(Source, db.session, category='Models'))
 admin.add_view(CustomModelViewPos(Pos, db.session, category='Models'))
+
+admin.add_link(MenuLink(name='Logout', endpoint='security.logout'))
