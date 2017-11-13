@@ -289,7 +289,7 @@ class CustomModelViewBase(ModelView):
 
 
 class CustomModelViewUser(CustomModelViewBase):
-    # column_select_related_list = ['mps',]
+    column_list = ('id', 'email', 'username', 'roles', 'active', 'last_login_at', 'current_login_at', 'last_login_ip', 'current_login_ip', 'login_count', 'task_id', 'task_log_id')
     column_formatters = dict(
         task_logs=lambda v, c, m, p: m.task_logs_str,
         check_logs=lambda v, c, m, p: m.check_logs_str,
@@ -346,19 +346,6 @@ class CustomModelViewTask(CustomModelViewBase):
 class CustomModelViewCheckLog(CustomModelViewBase):
     can_edit = False
     can_create = False
-    can_export = True
-    column_export_list = ('babel_net_id', 'english_lemmas', 'english_definition', 'english_examples', 'chinese_lemmas', 'potential_translations')
-    column_formatters_export = dict(
-        babel_net_id=lambda v, c, m, p: m.task_log.task.babel_net_id,
-        english_lemmas=lambda v, c, m, p: m.task_log.task.english_lemmas,
-        english_definition=lambda v, c, m, p: m.task_log.task.english_definition,
-        english_examples=lambda v, c, m, p: m.task_log.task.english_examples,
-        chinese_lemmas=lambda v, c, m, p: m.task_log.chinese_lemmas_str,
-        potential_translations=lambda v, c, m, p: m.task_log.task.potential_translations,
-    )
-    column_filters = ('result', 'confirmed_at', 'user.email')
-    # Default sort column if no sorting is applied.
-    column_default_sort = ('confirmed_at', True)
     # the example of using AJAX for foreign key model loading.
     form_ajax_refs = {
         'task_log': {
@@ -375,17 +362,24 @@ class CustomModelViewDictionary(CustomModelViewBase):
 class CustomModelViewTaskLog(CustomModelViewBase):
     can_create = False
     can_edit = False
-    can_delete = False
-    column_default_sort = ('confirmed_at', False)
     column_list = ('id', 'chinese_lemmas', 'task', 'user', 'check_logs', 'confirmed_at')
-    column_filters = ('task', 'user', 'check_logs')
+    column_filters = ('confirmed_at', 'task', 'user', 'check_logs')
     form_excluded_columns = ('task', 'check_logs')
     column_formatters = dict(
         check_logs=lambda v, c, m, p: m.check_logs_str,
         chinese_lemmas=lambda v, c, m, p: m.chinese_lemmas_str,
         task=lambda v, c, m, p: m.task.english_lemmas,
         user=lambda v, c, m, p: '{}-{}'.format(m.user.id, m.user.email),
+        babel_net_id=lambda v, c, m, p: m.task.babel_net_id,
+        english_lemmas=lambda v, c, m, p: m.task.english_lemmas,
+        english_definition=lambda v, c, m, p: m.task.english_definition,
+        english_examples=lambda v, c, m, p: m.task.english_examples,
+        potential_translations=lambda v, c, m, p: m.task.potential_translations,
+        check_result=lambda v, c, m, p: m.check_logs_str
     )
+    can_export = True
+    column_export_list = ('babel_net_id', 'english_lemmas', 'english_definition', 'english_examples', 'chinese_lemmas',
+                          'potential_translations', 'check_result')
     # Default sort column if no sorting is applied.
     column_default_sort = ('confirmed_at', True)
     column_extra_row_actions = [
@@ -429,7 +423,7 @@ admin.add_view(CheckView(name=u'审查', endpoint='check'))
 
 admin.add_view(CustomModelViewTaskLog(TaskLog, db.session, name=u'标注列表'))
 admin.add_view(CustomModelViewUser(User, db.session, name=u'用户管理'))
-admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, name=u'导出标注记录'))
+admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, name=u'审核记录'))
 admin.add_view(CustomModelViewBase(Role, db.session, category='Models'))
 admin.add_view(CustomModelViewTask(Task, db.session, category='Models'))
 admin.add_view(CustomModelViewDictionary(Dictionary, db.session, category='Models'))
