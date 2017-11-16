@@ -2,6 +2,7 @@
 from __future__ import division
 
 from datetime import datetime
+from random import random
 
 from flask import render_template, redirect, url_for, request, json, abort
 from flask_admin import BaseView, expose
@@ -21,6 +22,7 @@ from . import main
 from .forms import TaskLogForm, CKTextAreaField
 from .. import db, cache, admin
 from ..models import Task, TaskLog, User, Dictionary, Role, CheckLog, Source, Pos, Paraphrase, Sample
+from config import Config
 
 
 # from manage import youdao, iciba, haici, bing, oxford8, ldoce6, YOUDAO, HAICI, ICIBA, BING, LDOCE6, OXFORD8
@@ -115,16 +117,21 @@ def post_task():
                 chineses[i]['chinese'] = v['chinese'].strip()
                 form.chinese_lemmas.data = json.dumps(chineses)
 
+            need_check = False
+            if random() <= Config.CHECK_POINT:
+                need_check = True
             if tl:
                 # 若用户提交过，更新
                 tl.chinese_lemmas = form.chinese_lemmas.data
                 tl.confirmed_at = datetime.now()
+                tl.need_check = need_check
                 message = 'Modified successfully'
                 db.session.commit()
             else:
                 tl = TaskLog(task_id=form.task_id.data,
                              user_id=current_user.id,
                              chinese_lemmas=form.chinese_lemmas.data,
+                             need_check=need_check,
                              confirmed_at=datetime.now())
                 message = 'Saved successfully'
                 db.session.add(tl)
@@ -176,8 +183,8 @@ class CheckView(BaseView):
         获取进度
         :return:
         """
-        total = TaskLog.query.count()
-        rest = TaskLog.query.filter(TaskLog.check_logs == None).count()
+        total = TaskLog.query.filter(TaskLog.need_check == True).count()
+        rest = TaskLog.query.filter(and_(TaskLog.check_logs == None, TaskLog.need_check == True)).count()
         done = total - rest
         data = {
             'total': total,
@@ -389,7 +396,7 @@ class CustomModelViewTaskLog(CustomModelViewBase):
     def is_accessible(self):
         if not current_user.is_active or not current_user.is_authenticated:
             return False
-        if current_user.has_role('admin') or current_user.has_role('checker'):
+        if current_user.has_role('admin'):
             return True
         return False
 

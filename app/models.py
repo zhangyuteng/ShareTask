@@ -160,6 +160,7 @@ class TaskLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), index=True)
     chinese_lemmas = db.Column(db.Text)
     confirmed_at = db.Column(db.DateTime())
+    need_check = db.Column(db.Boolean, default=False)  # 是否需要审核
 
     check_logs = db.relationship('CheckLog', backref='task_log', lazy='dynamic')
 
@@ -176,10 +177,10 @@ class TaskLog(db.Model):
                 if u.task_log_id > 0:
                     all_used_task.append(u.task_log_id)
             if len(all_used_task) > 0:
-                task_log = TaskLog.query.filter(and_(TaskLog.check_logs == None, not_(TaskLog.id.in_(all_used_task)))).order_by(
+                task_log = TaskLog.query.filter(and_(TaskLog.check_logs == None, TaskLog.need_check == True, not_(TaskLog.id.in_(all_used_task)))).order_by(
                     TaskLog.id.asc()).with_lockmode('read').first()
             else:
-                task_log = TaskLog.query.filter(TaskLog.check_logs == None).order_by(TaskLog.id.asc()).first()
+                task_log = TaskLog.query.filter(and_(TaskLog.check_logs == None, TaskLog.need_check == True)).order_by(TaskLog.id.asc()).first()
         if not task_log:
             return []
         user = User.query.get(current_user.id)
@@ -364,4 +365,3 @@ class Sample(db.Model):
 
     def __repr__(self):
         return '<Sample-%d>' % (self.id,)
-
