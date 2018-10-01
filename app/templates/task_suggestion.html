@@ -6,7 +6,7 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="renderer" content="webkit">
-    <title>审核结果</title>
+    <title>修改建议</title>
     <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" rel="stylesheet">
 </head>
@@ -14,34 +14,12 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12">
-            <h3>{{ user.username }} 的标注结果</h3>
-            <table class="table table-bordered">
-                <thead>
-                <tr>
-                    <th>截至日期</th>
-                    <th>标注数量</th>
-                    <th>正确率</th>
-                    <th>每天的平均标注量</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr>
-                    <td>2018/1/31 <span class="bg-success">之前</span></td>
-                    <td>{{ before_count }}</td>
-                    <td>{{ before_true_rate }}%</td>
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>2018/2/1 ~ 2018/2/26</td>
-                    <td>{{ after_count }}</td>
-                    <td>{{ after_true_rate }}%</td>
-                    <td>{{ after_daily_count }}</td>
-                </tr>
-                </tbody>
-            </table>
-            {% if error_logs %}
-                <br>
-                <h4>不合格的标注结果</h4>
+            <br>
+            <form class="form-inline" style="margin-bottom: 15px" method="get">
+                <a class="btn btn-default" href="{{ url_for('main.index') }}">首页</a>
+            </form>
+            {% if suggestion_logs %}
+                <h4>修改建议</h4>
                 <table class="table table-bordered">
                     <thead>
                     <tr>
@@ -54,7 +32,7 @@
                     </tr>
                     </thead>
                     <tbody>
-                    {% for log in error_logs %}
+                    {% for log in suggestion_logs %}
                     <tr>
                         <td>{{ log['id'] }}</td>
                         <td>{{ log['english_lemmas'] }}</td>
@@ -66,6 +44,8 @@
                     {% endfor %}
                     </tbody>
                 </table>
+            {% else %}
+                <h2>暂无修改建议</h2>
             {% endif %}
         </div>
     </div>

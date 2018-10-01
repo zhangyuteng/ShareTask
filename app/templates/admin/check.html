@@ -1,5 +1,10 @@
 {% extends 'admin/master.html' %}
 {% block body %}
+<style>
+    .span4 .label-success{
+        font-size: 15px;
+    }
+</style>
 <div class="row" id="app">
     <div class="span12" v-show="message">
         <div class="alert alert-block alert-error fade in">
@@ -34,22 +39,22 @@
             <div class="span8">
                 <form class="form-horizontal">
                     <div class="control-group">
-                        <label class="control-label" for="inputEmail">审核结果</label>
-                        <div class="controls">
-                            <label class="radio">
-                                <input type="radio" name="result" v-model="check_result" value="1" checked>
-                                通过
+                        <label class="control-label" for="inputEmail" >审核结果</label>
+                        <div class="controls" id="checktip" style="font-size: 15px">
+                            <label class="radio" style="color: #008000;font-size: 18px">
+                                <input type="radio" name="result" v-model="check_result" value="right">
+                                right
                             </label>
-                            <label class="radio">
-                                <input type="radio" name="result" v-model="check_result" value="0">
-                                不通过
+                            <label class="radio" style="color: #ff0000;font-size: 18px">
+                                <input type="radio" name="result" v-model="check_result" value="wrong">
+                                wrong
                             </label>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label" for="inputPassword">原因</label>
                         <div class="controls">
-                            <textarea rows="3" v-model="check_comment"></textarea>
+                            <textarea rows="6" v-model="check_comment"></textarea>
                             <span class="help-inline">仅不通过时填写</span>
                         </div>
                     </div>
@@ -62,6 +67,14 @@
                 </form>
             </div>
             <div class="span4">
+                <div class="control-group">
+                        <label class="control-label" for="inputPassword">刷新间隔</label>
+                        <div class="controls">
+                            <input v-model="refresh">
+                        </div>
+                    </div>
+            </div>
+            <div class="span4" style="display: none">
                 <form class="form-search" @submit.prevent="load_task_log">
                     <input style="width: 30px" type="text" v-model="load_task_log_id" class="input-medium search-query">
                     <button type="button" class="btn" @click="load_task_log">载入</button>
@@ -81,25 +94,29 @@
             <div class="control-group">
                 <label class="control-label" for="inputEmail">English Lemmas</label>
                 <div class="controls">
-                    <span class="label label-success"
-                          style="margin-right: 8px;margin-bottom: 8px"
-                          v-for="word in english_lemmas" :key="word">[[ word ]]</span>
+                    <span   class="btns label label-success"
+                            style="margin-right: 8px;margin-bottom: 8px"
+                            v-for="word in english_lemmas" :key="word"
+                            v-bind:data-clipboard-text="word"
+                    >[[ word ]]</span>
                 </div>
             </div>
             <div class="control-group">
                 <label class="control-label" for="inputPassword">Chinese Lemmas</label>
                 <div class="controls">
                     <p>
-                    <span class="label label-success"
+                    <span class="btns label label-success"
                           style="margin-right: 8px;margin-bottom: 8px;white-space:normal;line-height: 15px"
-                          v-for="item in chinese_lemmas" :key="item.id">[[ item.chinese ]]</span>
+                          v-for="item in chinese_lemmas" :key="item.id"
+                          v-bind:data-clipboard-text="item.chinese"
+                    >[[ item.chinese ]]</span>
                     </p>
                 </div>
             </div>
             <div class="control-group">
                 <label class="control-label" for="inputPassword">English Definition</label>
                 <div class="controls">
-                    <p>[[ english_definition ]]</p>
+                    <p class="btns" v-bind:data-clipboard-text="english_definition">[[ english_definition ]]</p>
                 </div>
             </div>
             <div class="control-group">
@@ -108,12 +125,12 @@
                     <p>[[ english_examples ]]</p>
                 </div>
             </div>
-            <div class="control-group">
-                <label class="control-label" for="inputPassword">Post User</label>
-                <div class="controls">
-                    <p>[[ username ]] - [[ userid ]]</p>
-                </div>
-            </div>
+{#            <div class="control-group">#}
+{#                <label class="control-label" for="inputPassword">Post User</label>#}
+{#                <div class="controls">#}
+{#                    <p>[[ username ]] - [[ userid ]]</p>#}
+{#                </div>#}
+{#            </div>#}
         </form>
     </div>
     <div class="span8">
@@ -141,6 +158,10 @@
 </div>
 <script src="/static/js/vue.js"></script>
 <script src="/static/node_modules/vue-resource/dist/vue-resource.min.js"></script>
+{#<script src="/static/zeroclipboard-2.2.0/dist/ZeroClipboard.min.js"></script>#}
+<script src="/static/js/clipboard.min.js"></script>
+<script src="http://cdn.bootcss.com/jquery/1.12.3/jquery.min.js"></script>
+<script src="/static/layer/layer.js"></script>
 <script>
     String.prototype.trim = function() {
         return this.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
@@ -152,7 +173,7 @@
             progress: {total:0, rest:0, done:0},
             load_task_log_id: '',
             message: '',
-            check_result: '1',
+            check_result: '',
             check_comment: '',
             task_id: 0,
             task_log_id: {{ task_log_id }},
@@ -164,17 +185,32 @@
             username: '',
             userid: '',
             means: {},
+            result_map: {right: 1, wrong: 0},
+            refresh_i: 0,
+            refresh: 5
         },
         created: function () {
             this.getTaskLog(this.task_log_id);
+        },
+        mounted() {
+            // 绑定带有btns类的元素
+            const clipboard = new Clipboard('.btns');
+            clipboard.on('success', function(e) {
+                layer.msg('copy "' + e.text + '" success', {time:1000});
+                e.clearSelection();
+            });
         },
         methods: {
             submit(onlysubmit=0) {
                 let self =this;
                 if(self.task_log_id > 0){
+                    if(self.check_result !== 'right' && self.check_result !== 'wrong'){
+                        layer.tips('请选择审核结果', '#checktip', {tips: [1, '#3595CC']});
+                        return false;
+                    }
                     let data = {
                         task_log_id: self.task_log_id,
-                        result: self.check_result,
+                        result: self.result_map[self.check_result],
                         comment: self.check_comment,
                     };
                     self.http_post('{{ url_for('check.post_task_log') }}', data, function (res) {
@@ -192,6 +228,12 @@
             },
             getTaskLog(id=0) {
                 let self = this;
+                console.log(self.refresh_i);
+                if (self.refresh_i >= self.refresh) {
+                    location = '{{ url_for('check.check_task_log') }}';
+                }
+                ++self.refresh_i;
+
                 let url = '{{ url_for('check.get_task_log') }}';
                 if(id > 0){
                     url += '/' + id;
@@ -206,7 +248,13 @@
                         self.task_id = res.data.task_id;
                         self.load_task_log_id = res.data.task_log_id;
                         self.means = res.data.means;
-                        self.check_result = res.data.check_result;
+                        if(res.data.check_result === 1){
+                            self.check_result = 'right';
+                        }else if(res.data.check_result === 0){
+                            self.check_result = 'wrong';
+                        }else{
+                            self.check_result = '';
+                        }
                         self.check_comment = res.data.check_comment;
                         self.username = res.data.username;
                         self.userid = res.data.userid;

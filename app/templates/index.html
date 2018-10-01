@@ -73,6 +73,7 @@
         <el-menu-item index="1">工作台</el-menu-item>
         <el-menu-item index="4">标注记录</el-menu-item>
         <el-menu-item index="2">审核结果</el-menu-item>
+        <el-menu-item index="8">修改建议</el-menu-item>
         <el-menu-item index="3">规则说明</el-menu-item>
         <el-submenu index="5">
             <template slot="title">{{ user.username }}</template>
@@ -89,7 +90,6 @@
 
         </el-col>
         <el-col :span="8" class="col-work">
-            <h3 style="padding-left: 15px;padding-bottom: 20px">Part of Speech</h3>
             <el-form ref="form" :model="task" label-width="130px" @submit.native.prevent>
                 <el-form-item label="English Lemmas">
                     <div class="typo-Helvetica" >
@@ -103,8 +103,11 @@
                         </el-button>
                     </div>
                 </el-form-item>
+                <el-form-item label="Part of Speech">
+                    <p>n.</p>
+                </el-form-item>
                 <el-form-item label="English Definition">
-                    <p>[[ task.english_definition ]]</p>
+                    <p class="btn" v-bind:data-clipboard-text="task.english_definition">[[ task.english_definition ]]</p>
                 </el-form-item>
                 <el-form-item label="English Examples">
                     <p>[[ task.english_examples ]]</p>
@@ -223,12 +226,17 @@
         },
         computed: {
             csrf_token: function () {
-                return document.getElementById('csrf_token').value
+                const csrf_token = document.getElementById('csrf_token');
+                if(csrf_token){
+                    return csrf_token.value;
+                }else{
+                    return 0;
+                }
             },
         },
         mounted() {
             let self = this;
-            const clipboard = new Clipboard('.btn');
+            const clipboard = new Clipboard('.btn'); //// 绑定带有btn类的元素
             clipboard.on('success', function(e) {
                 self.$message('copy "' + e.text + '" success');
                 e.clearSelection();
@@ -271,6 +279,10 @@
                     location = '{{ url_for('security.change_password') }}'
                 }else if(key == '5-2'){
                     location = '{{ url_for('security.logout') }}'
+                }else if(key == '1'){
+                    location = '{{ url_for('main.index') }}'
+                }else if(key == '8'){
+                    window.open('{{ url_for('main.suggestion') }}')
                 }
             },
             handleClose(index) {
@@ -290,12 +302,12 @@
                 Vue.set(this.task.chinese_lemmas, index, this.task.chinese_lemmas[index]);
                 this.$nextTick(_ => {
 {#                    this.$refs.editTagInput.$refs.input.focus();#}
-                    console.log(this.$refs[old][0].$refs.input.focus());
+{#                    console.log(this.$refs[old][0].$refs.input.focus());#}
                 });
                 return false;
             },
             handleTagEdit(index) {
-                if(this.edit_chinese != this.task.chinese_lemmas[index].chinese){
+                if(this.edit_chinese.trim() != this.task.chinese_lemmas[index].chinese){
                     if(this.checkValueInChineseLemmas(this.edit_chinese) === false){
                         this.$notify({
                             title: '',
@@ -310,7 +322,7 @@
             showInput() {
                 this.inputVisible = true;
                 this.$nextTick(_ => {
-                    console.log(this.$refs.saveTagInput);
+                    {#console.log(this.$refs.saveTagInput);#}
                     this.$refs.saveTagInput.$refs.input.focus();
                 });
             },
@@ -324,6 +336,7 @@
                 this.inputValue = '';
             },
             insertChineseLemmas(chinese, paraphrase_id=0) {
+                chinese = chinese.trim();
                 if (chinese) {
                     // 检查是否存在
                     if(this.checkValueInChineseLemmas(chinese) === false){
@@ -334,12 +347,13 @@
                         });
                         return false;
                     }else{
-                        this.task.chinese_lemmas.push({chinese:chinese, id:paraphrase_id, show_input: false});
+                        this.task.chinese_lemmas.push({chinese:chinese.trim(), id:paraphrase_id, show_input: false});
                     }
                 }
 
             },
             editChineseLemmas(index, chinese) {
+                chinese = chinese.trim();
                 if(this.task.chinese_lemmas[index].show_input === true){
                     this.task.chinese_lemmas[index].chinese = chinese;
                     this.task.chinese_lemmas[index].show_input = false;
@@ -347,6 +361,7 @@
                 }
             },
             checkValueInChineseLemmas(value) {
+                value = value.trim()
                 // 检查是否存在
                 for(i in this.task.chinese_lemmas){
                     let task_chinese = this.task.chinese_lemmas[i].chinese;
@@ -394,7 +409,7 @@
                 }, false)
             },
             handleChange() {
-                console.log(234234)
+                {#console.log(234234)#}
             },
         }
     })

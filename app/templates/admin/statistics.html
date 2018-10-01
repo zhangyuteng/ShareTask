@@ -1,0 +1,31 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+
+{% for i in users_statistics %}
+    <h3>{{ i.realname }}[{{ i.username }}] 的标注结果</h3>
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th>截至日期</th>
+            <th>标注数量</th>
+            <th>正确率</th>
+            <th>每天的平均标注量</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>2018/1/31 <span class="bg-success">之前</span></td>
+            <td>{{ i.statistics[0] }}</td>
+            <td>{{ i.statistics[1] }}%</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>2018/2/1 ~ 2018/2/26</td>
+            <td>{{ i.statistics[2] }}</td>
+            <td>{{ i.statistics[3] }}%</td>
+            <td>{{ i.statistics[4] }}</td>
+        </tr>
+        </tbody>
+    </table>
+{% endfor %}
+{% endblock %}

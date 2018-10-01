@@ -2,7 +2,9 @@
 from __future__ import division
 
 from datetime import datetime
+from random import random
 
+import os
 from flask import render_template, redirect, url_for, request, json, abort
 from flask_admin import BaseView, expose
 from flask_admin._backwards import ObsoleteAttr
@@ -21,6 +23,7 @@ from . import main
 from .forms import TaskLogForm, CKTextAreaField
 from .. import db, cache, admin
 from ..models import Task, TaskLog, User, Dictionary, Role, CheckLog, Source, Pos, Paraphrase, Sample
+from config import Config
 
 
 # from manage import youdao, iciba, haici, bing, oxford8, ldoce6, YOUDAO, HAICI, ICIBA, BING, LDOCE6, OXFORD8
@@ -45,36 +48,39 @@ def rule():
 @main.route('/logs/<int:page>', methods=['GET'])
 @login_required
 def task_logs(page=1):
-    logs = TaskLog.query.filter(TaskLog.user_id == current_user.id).order_by(TaskLog.confirmed_at.desc()) \
-        .paginate(page, 10, False)
-    return render_template('task_logs.html', task_logs=logs, username=current_user.username)
+    task_log_id = request.args.get('task_log_id', type=int, default=0)
+    if task_log_id == 0:
+        count = TaskLog.query.filter(TaskLog.user_id == current_user.id).order_by(TaskLog.confirmed_at.desc()).count()
+        logs = TaskLog.query.filter(TaskLog.user_id == current_user.id).order_by(TaskLog.confirmed_at.desc()) \
+            .paginate(page, 10, False)
+    else:
+        count = 1
+        logs = TaskLog.query.filter(and_(TaskLog.id == task_log_id, TaskLog.user_id == current_user.id)).paginate(page,
+                                                                                                                  10,
+                                                                                                                  False)
+        print(logs)
+    return render_template('task_logs.html', task_logs=logs, username=current_user.username, count=count)
 
 
 @main.route('/result', methods=['GET'])
 @login_required
 def task_result():
-    logs = CheckLog.query.filter(CheckLog.task_log.has(user_id=current_user.id)).order_by(
+    before_count, before_true_rate, after_count, after_true_rate, after_daily_count = TaskLog.get_user_statistics(current_user.id)
+
+    # 获取错误标注的记录
+    check_logs = CheckLog.query.filter(CheckLog.task_log.has(user_id=current_user.id)).order_by(
         CheckLog.confirmed_at.desc()).all()
-    true_num = 0
-    total = 0
-    fail_num = 0
     error_logs = []
-    for log in logs:
-        total += 1
-        if log.result:
-            true_num += 1
-        else:
-            fail_num += 1
+    for log in check_logs:
+        if not log.result:
             error_logs.append({'english_lemmas': log.task_log.task.english_lemmas,
                                'english_definition': log.task_log.task.english_definition,
                                'chinese_lemmas': log.task_log.chinese_lemmas_str,
-                               'comment': log.comment})
-    if total > 0:
-        correct_rate = round(true_num / total * 100.0, 2)
-    else:
-        correct_rate = 0
-    return render_template('task_result.html', user=current_user, error_logs=error_logs,
-                           correct_rate=correct_rate, total=total, fail_num=fail_num, true_num=true_num)
+                               'comment': log.comment,
+                               'task_id': log.task_log.task.id,
+                               'id': log.task_log.id})
+    return render_template('task_result.html', user=current_user, error_logs=error_logs, before_count=before_count, before_true_rate=before_true_rate,
+                           after_count=after_count, after_true_rate=after_true_rate, after_daily_count=after_daily_count)
 
 
 @main.route('/task', methods=['GET'])
@@ -115,17 +121,25 @@ def post_task():
                 chineses[i]['chinese'] = v['chinese'].strip()
                 form.chinese_lemmas.data = json.dumps(chineses)
 
+            need_check = False
+            if random() <= Config.CHECK_POINT:
+                need_check = True
+            if os.environ['FLASK_CONFIG'] == 'testing':
+                need_check = True
             if tl:
                 # 若用户提交过，更新
                 tl.chinese_lemmas = form.chinese_lemmas.data
                 tl.confirmed_at = datetime.now()
+                tl.need_check = need_check
                 message = 'Modified successfully'
                 db.session.commit()
             else:
                 tl = TaskLog(task_id=form.task_id.data,
                              user_id=current_user.id,
                              chinese_lemmas=form.chinese_lemmas.data,
-                             confirmed_at=datetime.now())
+                             need_check=need_check,
+                             confirmed_at=datetime.now(),
+                             added_at=datetime.now())
                 message = 'Saved successfully'
                 db.session.add(tl)
                 db.session.commit()
@@ -143,6 +157,23 @@ def post_task():
     return render_json(status=0, message='\n'.join(errors))
 
 
+@main.route('/suggestion')
+def suggestion():
+    logs = CheckLog.query.filter(CheckLog.task_log.has(user_id=current_user.id)).order_by(
+        CheckLog.confirmed_at.desc()).all()
+    suggestion_logs = []
+    for log in logs:
+        if log.result:
+            if log.comment and log.result == True:
+                suggestion_logs.append({'english_lemmas': log.task_log.task.english_lemmas,
+                                        'english_definition': log.task_log.task.english_definition,
+                                        'chinese_lemmas': log.task_log.chinese_lemmas_str,
+                                        'comment': log.comment,
+                                        'task_id': log.task_log.task.id,
+                                        'id': log.task_log.id})
+    return render_template('task_suggestion.html', user=current_user, suggestion_logs=suggestion_logs)
+
+
 @main.route('/progress')
 def progress():
     """
@@ -150,13 +181,30 @@ def progress():
     :return:
     """
     total = float(Task.query.count())
-    rest = float(Task.query.filter(Task.task_logs == None).count())
-    done = total - rest
+    if os.environ['FLASK_CONFIG'] == 'testing':
+        done = float(TaskLog.query.filter(TaskLog.user_id == current_user.id).count())
+    else:
+        rest = float(Task.query.filter(Task.task_logs == None).count())
+        done = total - rest
     data = round(done / total * 100., 2)
     return render_json(status=1, data=data)
 
 
 # 后台管理页面的首页
+class StatisticsView(BaseView):
+    @expose('/')
+    def index(self):
+        users = User.query.filter(User.active == True).all()
+        users_statistics = []
+        for u in users:
+            users_statistics.append({
+                'username': u.email,
+                'realname': u.username,
+                'statistics': TaskLog.get_user_statistics(u.id)
+            })
+        return self.render('admin/statistics.html', users_statistics=users_statistics)
+
+
 class CheckView(BaseView):
     @expose('/')
     @expose('/<int:task_log_id>')
@@ -176,8 +224,8 @@ class CheckView(BaseView):
         获取进度
         :return:
         """
-        total = TaskLog.query.count()
-        rest = TaskLog.query.filter(TaskLog.check_logs == None).count()
+        total = TaskLog.query.filter(TaskLog.need_check == True).count()
+        rest = TaskLog.query.filter(and_(TaskLog.check_logs == None, TaskLog.need_check == True)).count()
         done = total - rest
         data = {
             'total': total,
@@ -289,7 +337,8 @@ class CustomModelViewBase(ModelView):
 
 
 class CustomModelViewUser(CustomModelViewBase):
-    # column_select_related_list = ['mps',]
+    column_list = ('id', 'email', 'username', 'roles', 'active', 'last_login_at', 'current_login_at', 'last_login_ip',
+                   'current_login_ip', 'login_count', 'task_id', 'task_log_id')
     column_formatters = dict(
         task_logs=lambda v, c, m, p: m.task_logs_str,
         check_logs=lambda v, c, m, p: m.check_logs_str,
@@ -346,23 +395,11 @@ class CustomModelViewTask(CustomModelViewBase):
 class CustomModelViewCheckLog(CustomModelViewBase):
     can_edit = False
     can_create = False
-    can_export = True
-    column_export_list = ('babel_net_id', 'english_lemmas', 'english_definition', 'english_examples', 'chinese_lemmas', 'potential_translations')
-    column_formatters_export = dict(
-        babel_net_id=lambda v, c, m, p: m.task_log.task.babel_net_id,
-        english_lemmas=lambda v, c, m, p: m.task_log.task.english_lemmas,
-        english_definition=lambda v, c, m, p: m.task_log.task.english_definition,
-        english_examples=lambda v, c, m, p: m.task_log.task.english_examples,
-        chinese_lemmas=lambda v, c, m, p: m.task_log.chinese_lemmas_str,
-        potential_translations=lambda v, c, m, p: m.task_log.task.potential_translations,
-    )
-    column_filters = ('result', 'confirmed_at', 'user.email')
-    # Default sort column if no sorting is applied.
     column_default_sort = ('confirmed_at', True)
     # the example of using AJAX for foreign key model loading.
     form_ajax_refs = {
         'task_log': {
-            'fields': ('id', ),
+            'fields': ('id',),
             'page_size': 10
         }
     }
@@ -374,17 +411,35 @@ class CustomModelViewDictionary(CustomModelViewBase):
 
 class CustomModelViewTaskLog(CustomModelViewBase):
     can_create = False
-    # can_edit = False
-    column_default_sort = ('confirmed_at', False)
-    column_list = ('id', 'chinese_lemmas', 'task', 'user', 'check_logs', 'confirmed_at')
-    column_filters = ('task', 'user', 'check_logs')
+    can_edit = False
+    column_list = ('id', 'task', 'chinese_lemmas', 'check_logs', 'annotator', 'annotate_time', 'checker', 'check_time')
+    column_labels = dict(task='en_lemmas', chinese_lemmas='cn_lemmas')
+    column_filters = (
+        'id', 'confirmed_at', 'task.english_lemmas', 'chinese_lemmas', 'user.id', 'user.email', 'user.username',
+        'check_logs', 'check_logs.user.email')
     form_excluded_columns = ('task', 'check_logs')
     column_formatters = dict(
         check_logs=lambda v, c, m, p: m.check_logs_str,
         chinese_lemmas=lambda v, c, m, p: m.chinese_lemmas_str,
         task=lambda v, c, m, p: m.task.english_lemmas,
         user=lambda v, c, m, p: '{}-{}'.format(m.user.id, m.user.email),
+        babel_net_id=lambda v, c, m, p: m.task.babel_net_id,
+        english_lemmas=lambda v, c, m, p: m.task.english_lemmas,
+        english_definition=lambda v, c, m, p: m.task.english_definition,
+        english_examples=lambda v, c, m, p: m.task.english_examples,
+        potential_translations=lambda v, c, m, p: m.task.potential_translations,
+        check_result=lambda v, c, m, p: m.check_logs_str,
+        annotator=lambda v, c, m, p: '{}-{}'.format(m.user.id, m.user.email),
+        checker=lambda v, c, m, p: m.checker_str,
+        annotate_time=lambda v, c, m, p: m.confirmed_at,
+        check_time=lambda v, c, m, p: m.check_time_str
     )
+    can_export = True
+    # column_export_list = ('babel_net_id', 'english_lemmas', 'english_definition', 'english_examples', 'chinese_lemmas',
+    #                       'potential_translations', 'check_result')
+    column_export_list = (
+        'id', 'task', 'english_definition', 'chinese_lemmas', 'check_logs', 'annotator', 'annotate_time', 'checker',
+        'check_time')
     # Default sort column if no sorting is applied.
     column_default_sort = ('confirmed_at', True)
     column_extra_row_actions = [
@@ -394,7 +449,7 @@ class CustomModelViewTaskLog(CustomModelViewBase):
     def is_accessible(self):
         if not current_user.is_active or not current_user.is_authenticated:
             return False
-        if current_user.has_role('admin') or current_user.has_role('checker'):
+        if current_user.has_role('admin') or current_user.has_role('superchecker'):
             return True
         return False
 
@@ -425,10 +480,11 @@ class CustomModelViewPos(CustomModelViewBase):
 
 
 admin.add_view(CheckView(name=u'审查', endpoint='check'))
+admin.add_view(StatisticsView(name=u'统计', endpoint='statistics'))
 
 admin.add_view(CustomModelViewTaskLog(TaskLog, db.session, name=u'标注列表'))
 admin.add_view(CustomModelViewUser(User, db.session, name=u'用户管理'))
-admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, name=u'导出标注记录'))
+admin.add_view(CustomModelViewCheckLog(CheckLog, db.session, name=u'审核记录'))
 admin.add_view(CustomModelViewBase(Role, db.session, category='Models'))
 admin.add_view(CustomModelViewTask(Task, db.session, category='Models'))
 admin.add_view(CustomModelViewDictionary(Dictionary, db.session, category='Models'))

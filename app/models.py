@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
 import random
 from datetime import datetime
 
@@ -6,8 +7,8 @@ import re
 from flask import json
 from flask_login import current_user
 from flask_security import UserMixin, RoleMixin
-from sqlalchemy import and_, not_
-
+from sqlalchemy import and_, not_, or_
+import os
 from . import db
 
 roles_users = db.Table('roles_users',
@@ -100,31 +101,38 @@ class Task(db.Model):
 
     @staticmethod
     def get_one(task_id=0):
-        users = User.query.with_lockmode('read').all()
-        all_used_task = []
         if task_id > 0:
             task = Task.query.get(task_id)
         elif current_user.task_id and current_user.task_id > 0:
             task = Task.query.get(current_user.task_id)
         else:
-            for u in users:
-                if u.task_id > 0:
-                    all_used_task.append(u.task_id)
-            if len(all_used_task) > 0:
-                task = Task.query.filter(and_(Task.task_logs == None, not_(Task.id.in_(all_used_task)))).order_by(Task.id.asc()).with_lockmode('read').first()
+            if os.environ['FLASK_CONFIG'] == 'testing':
+                # 测试环境，每个人测试所有任务。
+                tasklogs = TaskLog.query.filter(TaskLog.user_id == current_user.id).all()
+                task_ids = [i.task_id for i in tasklogs]
+                task = Task.query.filter(~Task.id.in_(task_ids)).first()
             else:
-                task = Task.query.filter(Task.task_logs == None).order_by(Task.id.asc()).first()
+                users = User.query.with_lockmode('read').all()
+                all_used_task = []
+                for u in users:
+                    if u.task_id > 0:
+                        all_used_task.append(u.task_id)
+                if len(all_used_task) > 0:
+                    task = Task.query.filter(and_(Task.task_logs == None, not_(Task.id.in_(all_used_task)))).order_by(Task.id.asc()).with_lockmode('read').first()
+                else:
+                    task = Task.query.filter(Task.task_logs == None).order_by(Task.id.asc()).first()
         user = User.query.get(current_user.id)
         user.task_id = task.id
         db.session.add(user)
         db.session.commit()
-        # 获取各个单词的解释
-        means = {}
-        for word in task.english_lemmas.split(', '):
-            word = word.replace('_', ' ')
-            means[word] = Dictionary.get_means(word)
+        if task:
+            # 获取各个单词的解释
+            means = {}
+            for word in task.english_lemmas.split(', '):
+                word = word.replace('_', ' ')
+                means[word] = Dictionary.get_means(word)
 
-        setattr(task, 'means', means)
+            setattr(task, 'means', means)
         return task
 
     def to_json(self):
@@ -140,6 +148,10 @@ class Task(db.Model):
         }
         if hasattr(self, 'task_log'):
             data['chinese_lemmas'] = json.loads(self.task_log.chinese_lemmas)
+        else:
+            task_log = self.task_logs.filter(TaskLog.user_id==current_user.id).first()
+            if task_log:
+                data['chinese_lemmas'] = json.loads((task_log.chinese_lemmas))
         return data
 
     @property  # for Flask-Admin column_formatters use
@@ -160,6 +172,8 @@ class TaskLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), index=True)
     chinese_lemmas = db.Column(db.Text)
     confirmed_at = db.Column(db.DateTime())
+    added_at = db.Column(db.DateTime())  # 记录添加时间
+    need_check = db.Column(db.Boolean, default=False)  # 是否需要审核
 
     check_logs = db.relationship('CheckLog', backref='task_log', lazy='dynamic')
 
@@ -176,10 +190,10 @@ class TaskLog(db.Model):
                 if u.task_log_id > 0:
                     all_used_task.append(u.task_log_id)
             if len(all_used_task) > 0:
-                task_log = TaskLog.query.filter(and_(TaskLog.check_logs == None, not_(TaskLog.id.in_(all_used_task)))).order_by(
+                task_log = TaskLog.query.filter(and_(TaskLog.check_logs == None, TaskLog.need_check == True, not_(TaskLog.id.in_(all_used_task)))).order_by(
                     TaskLog.id.asc()).with_lockmode('read').first()
             else:
-                task_log = TaskLog.query.filter(TaskLog.check_logs == None).order_by(TaskLog.id.asc()).first()
+                task_log = TaskLog.query.filter(and_(TaskLog.check_logs == None, TaskLog.need_check == True)).order_by(TaskLog.id.asc()).first()
         if not task_log:
             return []
         user = User.query.get(current_user.id)
@@ -197,10 +211,42 @@ class TaskLog(db.Model):
             setattr(task_log, 'check_result', int(check_log.result))
             setattr(task_log, 'check_comment', check_log.comment)
         else:
-            setattr(task_log, 'check_result', 1)
+            setattr(task_log, 'check_result', '')
             setattr(task_log, 'check_comment', '')
         setattr(task_log, 'means', means)
         return task_log
+
+    @staticmethod
+    def get_user_statistics(user_id=0):
+        if user_id == 0:
+            user_id = current_user.id
+        threshold = datetime(2018, 1, 31, 23, 59, 59)  # 设置日期分割线
+        endDate = datetime(2018, 2, 26, 23, 59, 58)  # 设置结束日期分割线
+
+        task_base_query = TaskLog.query.filter(TaskLog.user_id == user_id)
+        check_base_query = CheckLog.query.join(TaskLog, TaskLog.id == CheckLog.task_log_id).filter(TaskLog.user_id == user_id)
+        before_check_base_query = check_base_query.filter(or_(TaskLog.added_at < threshold, TaskLog.added_at == None))
+        after_check_base_query = check_base_query.filter(TaskLog.added_at > threshold)
+
+        before_logs_count = task_base_query.filter(or_(TaskLog.added_at <= threshold, TaskLog.added_at == None)).count()
+        before_check_count = before_check_base_query.count()
+        before_true_count = before_check_base_query.filter(CheckLog.result == True).count()
+        before_true_rate = 0
+        if before_check_count > 0:
+            before_true_rate = round(before_true_count / before_check_count * 100.0, 2)
+
+        after_logs_count = task_base_query.filter(TaskLog.added_at > threshold).count()
+        after_check_count = after_check_base_query.count()
+        after_true_count = after_check_base_query.filter(CheckLog.result == True).count()
+        after_true_rate = 0
+        if after_check_count > 0:
+            after_true_rate = round(after_true_count / after_check_count * 100.0, 2)
+        # 计算2018-1-31后平均每天的标注量
+        after_daily_count = 0
+        days = (endDate - threshold).days + 1
+        if days > 0:
+            after_daily_count = round(after_logs_count / days, 2)
+        return before_logs_count, before_true_rate, after_logs_count, after_true_rate, after_daily_count
 
     def to_json(self):
         result = {
@@ -223,7 +269,11 @@ class TaskLog(db.Model):
     def check_logs_str(self):
         ulist = []
         for t in self.check_logs.all():
-            ulist.append(u'{}: {}'.format(t.result, t.comment))
+            if current_user.has_role('admin'):
+                ulist.append(u'{}: {}'.format(t.result, t.comment))
+            else:
+                if current_user.id == t.checker_id:
+                    ulist.append(u'{}: {}'.format(t.result, t.comment))
         return ulist
 
     @property
@@ -232,6 +282,20 @@ class TaskLog(db.Model):
         for t in json.loads(self.chinese_lemmas):
             ulist.append(t['chinese'])
         return '; '.join(ulist)
+
+    @property
+    def checker_str(self):
+        check_log = self.check_logs.first()
+        if check_log:
+            return '{}-{}'.format(check_log.user.id, check_log.user.email)
+        return ''
+
+    @property
+    def check_time_str(self):
+        check_log = self.check_logs.first()
+        if check_log:
+            return check_log.confirmed_at
+        return ''
 
     def __repr__(self):
         return '<TaskLog-%d Task-%d>' % (self.id, self.task_id)
@@ -247,7 +311,7 @@ class CheckLog(db.Model):
     confirmed_at = db.Column(db.DateTime())
 
     def __repr__(self):
-        return '<CheckLog-%d %d:%s>' % (self.id, self.task_log_id, self.result)
+        return '<CheckLog-%d %s>' % (self.id, self.result)
 
 
 class Dictionary(db.Model):
@@ -265,6 +329,7 @@ class Dictionary(db.Model):
             paraphrases = dictionary.paraphrases.all()
             for p in paraphrases:
                 if p.pos.tag == 'n':
+                    ch = u''
                     if p.ch:
                         p.ch = p.ch.replace(u'; ', u';')
                         p.ch = p.ch.replace(u'； ', u';')
@@ -276,7 +341,8 @@ class Dictionary(db.Model):
                     if p.source.comment in result:
                         result[p.source.comment].append({'id': p.id, 'ch': ch, 'en': p.en, 'samples': [i.to_json() for i in p.samples.all()]})
                     else:
-                        result[p.source.comment] = [{'id': p.id, 'ch': ch, 'en': p.en, 'samples': [i.to_json() for i in p.samples.all()]}]
+                        if p.samples.all():
+                            result[p.source.comment] = [{'id': p.id, 'ch': ch, 'en': p.en, 'samples': [i.to_json() for i in p.samples.all()]}]
             # 挑选两个词典
             if len(result) > 0:
                 if len(result) > 2:
@@ -364,4 +430,3 @@ class Sample(db.Model):
 
     def __repr__(self):
         return '<Sample-%d>' % (self.id,)
-

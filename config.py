@@ -1,3 +1,4 @@
+# coding=utf-8
 import datetime
 import os
 
@@ -5,14 +6,18 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'hard to guess stringasdf45asd5454889'
+    CHECK_POINT = 0.1  # 抽查比率
+
+    SECRET_KEY = 'hardtoaasd)*&ssdf45asd5454889'
     # allow tracing login activities
     SECURITY_TRACKABLE = True
+    SECURITY_CHANGEABLE = True
     SECURITY_PASSWORD_HASH = 'pbkdf2_sha512'
     SECURITY_PASSWORD_SALT = 'super-secretasdf54554fadf'
     # allow register
     SECURITY_REGISTERABLE = True
     SECURITY_SEND_REGISTER_EMAIL = False
+    SECURITY_SEND_PASSWORD_CHANGE_EMAIL = False
     SECURITY_LOGIN_USER_TEMPLATE = 'login.html'
 
 #    JWT_EXPIRATION_DELTA = datetime.timedelta(seconds=10)
@@ -21,13 +26,13 @@ class Config:
     SSL_DISABLE = False
     SQLALCHEMY_COMMIT_ON_TEARDOWN = True
     SQLALCHEMY_RECORD_QUERIES = True
-    MAIL_SERVER = 'smtp.googlemail.com'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    FLASKY_MAIL_SUBJECT_PREFIX = '[Flasky]'
-    FLASKY_MAIL_SENDER = 'Flasky Admin <flasky@example.com>'
+    # MAIL_SERVER = 'smtp.googlemail.com'
+    # MAIL_PORT = 587
+    # MAIL_USE_TLS = True
+    # MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
+    # MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    # FLASKY_MAIL_SUBJECT_PREFIX = '[Flasky]'
+    # FLASKY_MAIL_SENDER = 'Flasky Admin <flasky@example.com>'
     FLASKY_ADMIN = os.environ.get('FLASKY_ADMIN')
     FLASKY_POSTS_PER_PAGE = 20
     FLASKY_FOLLOWERS_PER_PAGE = 50
@@ -42,8 +47,7 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = True
     # SQLALCHEMY_ECHO = True
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DEV_DATABASE_URL') or \
-        'mysql://root:123456@127.0.0.1:3306/dictlabel-dev?charset=utf8mb4'
+    SQLALCHEMY_DATABASE_URI = 'mysql://root:root@127.0.0.1:3306/dictlabel-dev?charset=utf8mb4'
 
 
 class TestingConfig(Config):
@@ -55,31 +59,30 @@ class TestingConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'mysql://root:123456@127.0.0.1:3306/dictlabel-dev?charset=utf8mb4'
+    SQLALCHEMY_DATABASE_URI = 'mysql://sharetask:sharetask@127.0.0.1:3306/dictlabel?charset=utf8mb4'
 
     @classmethod
     def init_app(cls, app):
         Config.init_app(app)
 
         # email errors to the administrators
-        import logging
-        from logging.handlers import SMTPHandler
-        credentials = None
-        secure = None
-        if getattr(cls, 'MAIL_USERNAME', None) is not None:
-            credentials = (cls.MAIL_USERNAME, cls.MAIL_PASSWORD)
-            if getattr(cls, 'MAIL_USE_TLS', None):
-                secure = ()
-        mail_handler = SMTPHandler(
-            mailhost=(cls.MAIL_SERVER, cls.MAIL_PORT),
-            fromaddr=cls.FLASKY_MAIL_SENDER,
-            toaddrs=[cls.FLASKY_ADMIN],
-            subject=cls.FLASKY_MAIL_SUBJECT_PREFIX + ' Application Error',
-            credentials=credentials,
-            secure=secure)
-        mail_handler.setLevel(logging.ERROR)
-        app.logger.addHandler(mail_handler)
+        # import logging
+        # from logging.handlers import SMTPHandler
+        # credentials = None
+        # secure = None
+        # if getattr(cls, 'MAIL_USERNAME', None) is not None:
+        #     credentials = (cls.MAIL_USERNAME, cls.MAIL_PASSWORD)
+        #     if getattr(cls, 'MAIL_USE_TLS', None):
+        #         secure = ()
+        # mail_handler = SMTPHandler(
+        #     mailhost=(cls.MAIL_SERVER, cls.MAIL_PORT),
+        #     fromaddr=cls.FLASKY_MAIL_SENDER,
+        #     toaddrs=[cls.FLASKY_ADMIN],
+        #     subject=cls.FLASKY_MAIL_SUBJECT_PREFIX + ' Application Error',
+        #     credentials=credentials,
+        #     secure=secure)
+        # mail_handler.setLevel(logging.ERROR)
+        # app.logger.addHandler(mail_handler)
 
 
 class HerokuConfig(ProductionConfig):

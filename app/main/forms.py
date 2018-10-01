@@ -57,7 +57,6 @@ class TaskLogForm(FlaskForm):
             if invaild_RE.search(item['chinese']):
                 errors.append(item['chinese'])
         if errors:
-            print errors
             self.errors['chinese_lemmas'] = [u'" {} " have illegal characters'.format(u','.join(errors))]
             return False
         else:
