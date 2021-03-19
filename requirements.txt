@@ -30,7 +30,7 @@ greenlet==0.4.12
 idna==2.6
 iSearch==1.0.2
 itsdangerous==0.24
-Jinja2==2.9.6
+Jinja2==2.11.3
 lxml==3.7.1
 Mako==1.0.7
 MarkupSafe==1.0
