@@ -32,7 +32,7 @@ iSearch==1.0.2
 itsdangerous==0.24
 Jinja2==2.9.6
 lxml==3.7.1
-Mako==1.0.7
+Mako==1.2.2
 MarkupSafe==1.0
 mysqlclient==1.3.12
 passlib==1.7.1
